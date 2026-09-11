@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+plotly
+openpyxl
+streamlit-cookies-controller
+scikit-learn
