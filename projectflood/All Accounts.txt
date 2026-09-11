@@ -1,0 +1,77 @@
+🏛️ Division Admin
+Division	  Username	                   Password
+Dhaka	         dhaka_admin	                 dhakaadmin123
+Chattogram	chattogram_admin	      chattogramadmin123
+Rajshahi	rajshahi_admin	                rajshahiadmin123
+Khulna	        khulna_admin	                khulnaadmin123
+Barishal	barishal_admin	               barishaladmin123
+Sylhet	        sylhet_admin	                sylhetadmin123
+Rangpur	        rangpur_admin	                 rangpuradmin123
+Mymensingh	mymensingh_admin	       mymensinghadmin123
+
+
+👮🚒🏥🏛️ Division Emergency Organizations
+
+Dhaka
+
+Police: dhaka_police / dhakapolice123
+Fire: dhaka_fire / dhakafire123
+Hospital: dhaka_hospital / dhakahospital123
+Municipality: dhaka_municipality / dhakamunicipality123
+
+Chattogram
+
+Police: chattogram_police / chattogrampolice123
+Fire: chattogram_fire / chattogramfire123
+Hospital: chattogram_hospital / chattogramhospital123
+Municipality: chattogram_municipality / chattogrammunicipality123
+
+Rajshahi
+
+Police: rajshahi_police / rajshahipolice123
+Fire: rajshahi_fire / rajshahifire123
+Hospital: rajshahi_hospital / rajshahihospital123
+Municipality: rajshahi_municipality / rajshahimunicipality123
+
+Khulna
+
+Police: khulna_police / khulnapolice123
+Fire: khulna_fire / khulnafire123
+Hospital: khulna_hospital / khulnahospital123
+Municipality: khulna_municipality / khulnamunicipality123
+
+Barishal
+
+Police: barishal_police / barishalpolice123
+Fire: barishal_fire / barishalfire123
+Hospital: barishal_hospital / barishalhospital123
+Municipality: barishal_municipality / barishalmunicipality123
+
+Sylhet
+
+Police: sylhet_police / sylhetpolice123
+Fire: sylhet_fire / sylhetfire123
+Hospital: sylhet_hospital / sylhethospital123
+Municipality: sylhet_municipality / sylhetmunicipality123
+
+Rangpur
+
+Police: rangpur_police / rangpurpolice123
+Fire: rangpur_fire / rangpurfire123
+Hospital: rangpur_hospital / rangpurhospital123
+Municipality: rangpur_municipality / rangpurmunicipality123
+
+Mymensingh
+
+Police: mymensingh_police / mymensinghpolice123
+Fire: mymensingh_fire / mymensinghfire123
+Hospital: mymensingh_hospital / mymensinghhospital123
+Municipality: mymensingh_municipality / mymensinghmunicipality123
+
+
+
+System Handler: system_handler / syshandler123 — এর সাথে Gmail OTP
+
+
+
+

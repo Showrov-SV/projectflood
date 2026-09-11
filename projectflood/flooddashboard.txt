@@ -1,0 +1,9 @@
+aita 1st time dibi 
+pip install streamlit pandas numpy plotly openpyxl streamlit-cookies-controller scikit-learn
+
+
+then 
+python -m streamlit run flooddashboard.py
+
+Username: admin
+Password: admin123
