@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sqlite3
 import hashlib
+import re
 from datetime import datetime, timedelta
 import random
 import smtplib
@@ -1588,7 +1589,12 @@ def send_otp_email(otp_code):
 
     try:
 
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        # timeout: without one, an unreachable/slow network makes
+        # the whole login page hang for minutes instead of failing
+        # fast with the friendly error below.
+        with smtplib.SMTP(
+            "smtp.gmail.com", 587, timeout=10
+        ) as server:
 
             server.starttls()
             server.login(sender, app_password)
@@ -1600,7 +1606,7 @@ def send_otp_email(otp_code):
 
         return True, None
 
-    except Exception as exc:
+    except Exception:
 
         # Never surface SMTP internals (which could hint at the
         # credentials) to the UI — just a generic failure.
@@ -1983,15 +1989,19 @@ def calculate_flood_probability(
     humidity
 ):
     """
-    SUPERSEDED — kept only for reference/comparison. The live
+    SUPERSEDED — kept only for reference/comparison (this
+    function's own formula is now effectively duplicated, with
+    identical coefficients, as hybrid_model.compute_physics_score
+    — the physics component of the live pipeline below). The live
     prediction path now uses hybrid_flood_prediction() below,
-    which runs a genuine reduced-order physics/water-balance model
-    (hybrid_model.run_physics_model) whose outputs feed a trained
-    scikit-learn RandomForestRegressor (hybrid_model.
-    train_hybrid_ml_model), then blends both results. This
-    original simple weighted-sum formula is no longer called by
-    generate_sensor_data() or process_uploaded_dataframe() — see
-    hybrid_model.py for the actual hybrid framework.
+    which runs the physics-inspired score/sigmoid model
+    (hybrid_model.run_physics_model) whose outputs feed TWO
+    trained ensemble regressors — Random Forest and XGBoost
+    (hybrid_model.train_hybrid_ml_model) — averaged together, then
+    blended with the physics estimate. This function itself is no
+    longer called by generate_sensor_data() or
+    process_uploaded_dataframe() — see hybrid_model.py for the
+    actual hybrid framework.
     """
 
     score = (
@@ -2087,7 +2097,7 @@ def get_trained_hybrid_model():
     instance rather than retraining from scratch.
     """
 
-    return hybrid_model.train_hybrid_ml_model()
+    return hybrid_model.load_or_train_hybrid_ml_model()
 
 
 def hybrid_flood_prediction(
@@ -2138,6 +2148,35 @@ def hybrid_flood_prediction(
         "model_name": result["model_name"],
         "physics_features": result["physics"],
     }
+
+
+def hybrid_flood_prediction_batch(readings):
+    """
+    Vectorised version of hybrid_flood_prediction(): predicts a
+    whole DataFrame of readings (must contain the seven raw sensor
+    columns) with ONE physics pass and ONE predict() call per ML
+    model, instead of one full prediction per row. Returns a
+    DataFrame (same row order) with the columns the dashboards use:
+    flood_probability, risk_level, predicted_water_level,
+    physics_probability, ml_probability, ml_used, model_name.
+    """
+
+    out = hybrid_model.hybrid_predict_batch(
+        readings,
+        get_trained_hybrid_model()
+    )
+
+    flood_probability = out["hybrid_probability"].round(2)
+
+    return pd.DataFrame({
+        "flood_probability": flood_probability,
+        "risk_level": [classify_risk(p) for p in flood_probability],
+        "predicted_water_level": out["predicted_water_level"],
+        "physics_probability": out["physics_probability"],
+        "ml_probability": out["ml_probability"],
+        "ml_used": out["ml_used"],
+        "model_name": out["model_name"],
+    })
 
 
 # ============================================================
@@ -2305,16 +2344,21 @@ def normalize_dataset_columns(df):
 
     df = df.copy()
 
+    # Tolerant header cleaning: "Rainfall (mm)", "Humidity (%)",
+    # "River Flow [m3/s]" and "Water-Level" all reduce to the
+    # plain column name (units in brackets are dropped, and any
+    # run of non-alphanumeric characters becomes a single "_").
+    def _clean_header(column):
+
+        name = re.sub(r"[\(\[\{].*?[\)\]\}]", "", str(column))
+
+        name = re.sub(r"[^0-9a-zA-Z]+", "_", name.strip().lower())
+
+        return name.strip("_")
+
     df.columns = [
-
-        str(column)
-        .strip()
-        .lower()
-        .replace(" ", "_")
-        .replace("-", "_")
-
+        _clean_header(column)
         for column in df.columns
-
     ]
 
     aliases = {
@@ -2557,8 +2601,6 @@ def process_uploaded_dataframe(
             "%Y-%m-%d %H:%M:%S"
         )
 
-    results = []
-
     multi_row = len(df) > 1
 
     base_sensor_id = (
@@ -2569,119 +2611,53 @@ def process_uploaded_dataframe(
         )
     )
 
-    for row_index, (_, row) in enumerate(
-        df.iterrows(),
-        start=1
-    ):
+    df = df.reset_index(drop=True)
 
-        hybrid_result = hybrid_flood_prediction(
-            water_level=float(row["water_level"]),
-            rainfall=float(row["rainfall"]),
-            river_flow=float(row["river_flow"]),
-            temperature=float(row["temperature"]),
-            humidity=float(row["humidity"]),
-            soil_moisture=float(row["soil_moisture"]),
-            wind_speed=float(row["wind_speed"])
-        )
-
-        sensor_id = str(
-            row["sensor_id"]
-        ).strip()
-
-        if not sensor_id:
-
-            sensor_id = base_sensor_id
-
-            if multi_row:
-
-                sensor_id = f"{base_sensor_id}-{row_index}"
-
-        timestamp = str(
-            row["timestamp"]
-        )
-
-        results.append({
-
-            "sensor_id":
-                sensor_id,
-
-            "location":
-                location,
-
-            "timestamp":
-                timestamp,
-
-            "water_level":
-                round(
-                    float(row["water_level"]),
-                    2
-                ),
-
-            "rainfall":
-                round(
-                    float(row["rainfall"]),
-                    2
-                ),
-
-            "river_flow":
-                round(
-                    float(row["river_flow"]),
-                    2
-                ),
-
-            "temperature":
-                round(
-                    float(row["temperature"]),
-                    2
-                ),
-
-            "humidity":
-                round(
-                    float(row["humidity"]),
-                    2
-                ),
-
-            "soil_moisture":
-                round(
-                    float(row["soil_moisture"]),
-                    2
-                ),
-
-            "wind_speed":
-                round(
-                    float(row["wind_speed"]),
-                    2
-                ),
-
-            "flood_probability":
-                hybrid_result["flood_probability"],
-
-            "risk_level":
-                hybrid_result["risk_level"],
-
-            "predicted_water_level":
-                hybrid_result["predicted_water_level"],
-
-            "physics_probability":
-                hybrid_result["physics_probability"],
-
-            "ml_probability":
-                hybrid_result["ml_probability"],
-
-            "ml_used":
-                hybrid_result["ml_used"],
-
-            "model_name":
-                hybrid_result["model_name"],
-
-            "data_source":
-                "External Dataset"
-
-        })
-
-    return pd.DataFrame(
-        results
+    # One vectorised prediction for the whole file (instead of
+    # one full model call per row).
+    prediction = hybrid_flood_prediction_batch(
+        df[REQUIRED_DATASET_COLUMNS]
     )
+
+    # Blank / missing sensor_id cells fall back to the generated
+    # DATA-<LOCATION>[-n] id (previously a missing cell became the
+    # literal text "nan").
+    sensor_ids = (
+        df["sensor_id"].fillna("").astype(str).str.strip()
+        .replace({"nan": "", "None": ""})
+    )
+
+    if multi_row:
+        fallback_ids = pd.Series(
+            [
+                f"{base_sensor_id}-{i}"
+                for i in range(1, len(df) + 1)
+            ],
+            index=df.index
+        )
+    else:
+        fallback_ids = pd.Series(base_sensor_id, index=df.index)
+
+    sensor_ids = sensor_ids.where(sensor_ids != "", fallback_ids)
+
+    results = pd.DataFrame({
+        "sensor_id": sensor_ids,
+        "location": location,
+        "timestamp": df["timestamp"].astype(str),
+    })
+
+    results = pd.concat(
+        [
+            results,
+            df[REQUIRED_DATASET_COLUMNS].astype(float).round(2),
+            prediction
+        ],
+        axis=1
+    )
+
+    results["data_source"] = "External Dataset"
+
+    return results
 
 
 def ensure_dataset_state():
@@ -2821,6 +2797,88 @@ def remove_dataset_location(location):
 # GENERATE ALL SENSOR DATA
 # ============================================================
 
+def simulate_sensor_readings(sensors):
+    """
+    Simulates one fresh reading per row of `sensors` (needs
+    `sensor_id` and `location` columns) using the same value
+    ranges as generate_sensor_data(), but generates every value
+    and runs the hybrid prediction for ALL sensors in one
+    vectorised batch. Returns a DataFrame with the same columns
+    generate_sensor_data() returns per reading.
+    """
+
+    n = len(sensors)
+
+    if n == 0:
+        return pd.DataFrame()
+
+    raw = pd.DataFrame({
+        "water_level": np.random.uniform(1.0, 4.8, n),
+        "rainfall": np.random.uniform(5, 150, n),
+        "river_flow": np.random.uniform(1, 15, n),
+        "temperature": np.random.uniform(24, 34, n),
+        "humidity": np.random.uniform(55, 98, n),
+        "soil_moisture": np.random.uniform(30, 98, n),
+        "wind_speed": np.random.uniform(1, 20, n),
+    })
+
+    prediction = hybrid_flood_prediction_batch(raw)
+
+    result = pd.DataFrame({
+        "sensor_id": sensors["sensor_id"].to_numpy(),
+        "location": sensors["location"].to_numpy(),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+
+    result = pd.concat(
+        [result, raw.round(2), prediction],
+        axis=1
+    )
+
+    result["data_source"] = "Simulation"
+
+    return result
+
+
+def save_sensor_readings(readings):
+    """Writes many sensor readings in ONE connection / ONE
+    transaction (instead of one connect + commit per sensor)."""
+
+    if readings is None or readings.empty:
+        return
+
+    columns = [
+        "sensor_id", "timestamp", "water_level", "rainfall",
+        "river_flow", "temperature", "humidity", "soil_moisture",
+        "wind_speed", "flood_probability", "risk_level"
+    ]
+
+    rows = [
+        tuple(
+            value.item() if hasattr(value, "item") else value
+            for value in record
+        )
+        for record in readings[columns].itertuples(
+            index=False, name=None
+        )
+    ]
+
+    conn = get_connection()
+
+    try:
+        with conn:
+            conn.executemany(
+                "INSERT INTO sensor_readings("
+                + ", ".join(columns)
+                + ") VALUES ("
+                + ", ".join("?" * len(columns))
+                + ")",
+                rows
+            )
+    finally:
+        conn.close()
+
+
 def generate_all_sensor_data():
 
     sensors = get_sensors()
@@ -2844,49 +2902,19 @@ def generate_all_sensor_data():
 
         )
 
-    readings = []
-
-    for _, row in sensors.iterrows():
-
-        location = str(
-            row["location"]
-        ).strip()
-
-        # ----------------------------------------------------
-        # IMPORTANT:
-        # If external dataset contains this location,
-        # simulation is disabled for that location.
-        # ----------------------------------------------------
-
-        if location.lower() in dataset_locations:
-
-            continue
-
-        sensor = {
-
-            "sensor_id":
-                row["sensor_id"],
-
-            "location":
-                location
-
-        }
-
-        data = generate_sensor_data(
-            sensor
-        )
-
-        save_sensor_reading(
-            data
-        )
-
-        readings.append(
-            data
-        )
-
-    simulated_df = pd.DataFrame(
-        readings
+    # Sensors whose location is backed by an uploaded dataset are
+    # NOT simulated; everything else is simulated in ONE batch.
+    sensors = sensors.assign(
+        location=sensors["location"].astype(str).str.strip()
     )
+
+    to_simulate = sensors[
+        ~sensors["location"].str.lower().isin(dataset_locations)
+    ]
+
+    simulated_df = simulate_sensor_readings(to_simulate)
+
+    save_sensor_readings(simulated_df)
 
     if not dataset_readings.empty:
 
@@ -3374,6 +3402,8 @@ def sensor_and_dataset_management_section(
             latitude = st.number_input(
                 "Latitude",
                 value=23.8103,
+                min_value=-90.0,
+                max_value=90.0,
                 format="%.6f",
                 key=f"{key_prefix}_sensor_lat"
             )
@@ -3381,6 +3411,8 @@ def sensor_and_dataset_management_section(
             longitude = st.number_input(
                 "Longitude",
                 value=90.4125,
+                min_value=-180.0,
+                max_value=180.0,
                 format="%.6f",
                 key=f"{key_prefix}_sensor_lon"
             )
@@ -3402,6 +3434,12 @@ def sensor_and_dataset_management_section(
                 "➕ Register Sensor",
                 key=f"{key_prefix}_register_btn"
             ):
+
+                # Trim stray spaces so "S1 " and "S1" can't become
+                # two different sensors and a whitespace-only value
+                # can't pass the "not empty" check below.
+                sensor_id = (sensor_id or "").strip()
+                location = (location or "").strip()
 
                 if (
                     scope_locations is not None
@@ -3456,7 +3494,9 @@ def sensor_and_dataset_management_section(
                             "Sensor ID already exists."
                         )
 
-                    conn.close()
+                    finally:
+
+                        conn.close()
 
                 else:
 
@@ -4726,6 +4766,31 @@ def get_unread_emergency_alert_count(recipient_key):
     conn.close()
 
     return count
+
+
+def get_unread_emergency_alert_counts_by_recipient():
+    """
+    Unread alert count for EVERY mailbox in ONE query, as a
+    {recipient_key: count} dict. Use this instead of calling
+    get_unread_emergency_alert_count() in a loop over many
+    accounts (that opens one DB connection per account).
+    """
+
+    conn = get_connection()
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT recipient_key, COUNT(*)
+            FROM emergency_alert_reads
+            WHERE is_read = 0
+            GROUP BY recipient_key
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return dict(rows)
 
 
 def mark_emergency_alerts_read(recipient_key):
@@ -6145,71 +6210,113 @@ def render_model_information_panel():
     model_bundle = get_trained_hybrid_model()
 
     st.markdown(
-        "### Hybrid Physics + Machine Learning Flood Prediction "
-        "Framework"
+        "### Hybrid Physics-Inspired + Ensemble Machine Learning "
+        "Flood Prediction Framework"
     )
 
     physics_text = _html_no_indent("""
-    **Physics / Mathematical Component**
+    **Physics-Inspired Component**
 
-    A reduced-order water-balance / linear-reservoir model —
-    explicitly NOT a full Saint-Venant shallow-water solver (out
-    of scope for a real-time Streamlit prototype). It computes:
+    A flood risk score S is computed as a weighted linear
+    combination of five sensor variables:
 
-    - Runoff coefficient from soil moisture (saturated soil ->
-      more runoff), in the spirit of an SCS curve-number
-      approach
-    - Estimated inflow: river flow + rainfall-driven runoff
-    - Estimated outflow: a linear-reservoir term proportional to
-      current water level
-    - A small temperature-driven evaporation loss
-    - Net water balance and a resulting predicted water-level
-      change over a short time step
+    S = 18·W + 0.28·R + 2.5·F + 0.12·SM + 0.08·H
 
-    See `hybrid_model.py` (`run_physics_model`) for the exact,
-    fully-commented formulas and constants.
+    (water level, rainfall, river flow, soil moisture, humidity).
+    S is mapped to a bounded probability P_physics via a logistic
+    (sigmoid) transform centered on a calibration midpoint. See
+    `hybrid_model.py` (`compute_physics_score`,
+    `physics_probability_from_score`) for the exact constants.
     """)
 
     st.markdown(physics_text)
 
     if model_bundle.get("available"):
 
-        ml_text = _html_no_indent(f"""
-        **Machine Learning Component**
+        random_forest = model_bundle.get("random_forest") or {}
+        xgboost_result = model_bundle.get("xgboost") or {}
 
-        Model: **{model_bundle['model_name']}**, genuinely
-        trained via `.fit()` on a physics-informed synthetic
-        dataset (there's no bundled real historical flood
-        dataset for Bangladesh in this app — see the honesty
-        note at the top of `hybrid_model.py`).
+        ml_intro_text = _html_no_indent(f"""
+        **Machine Learning Components**
 
-        - Training samples: **{model_bundle['n_training_samples']}**
-        - Held-out test samples: **{model_bundle['n_test_samples']}**
-        - Test R² score: **{model_bundle['r2_score']}**
-        - Test MAE: **{model_bundle['mae']}** probability points
+        Two ensemble regressors, each genuinely trained via
+        `.fit()` on a physics-informed synthetic dataset (there's
+        no bundled real historical flood dataset for Bangladesh in
+        this app — see the honesty note at the top of
+        `hybrid_model.py`). Their outputs are averaged into one ML
+        estimate.
 
-        These are the actual metrics from the model that is
-        running right now, computed on data it was NOT trained
-        on — not hard-coded placeholder numbers.
+        - Training samples: **{model_bundle.get('n_training_samples')}**
+        - Held-out test samples: **{model_bundle.get('n_test_samples')}**
         """)
 
-        st.markdown(ml_text)
+        st.markdown(ml_intro_text)
 
-        with st.expander("📊 Feature importances (from the trained model)"):
+        rf_col, xgb_col = st.columns(2)
 
-            importances_df = pd.DataFrame(
-                sorted(
-                    model_bundle["feature_importances"].items(),
-                    key=lambda item: -item[1]
-                ),
-                columns=["Feature", "Importance"]
-            )
+        with rf_col:
 
-            st.dataframe(
-                importances_df,
-                width="stretch",
-                hide_index=True
-            )
+            if random_forest.get("available"):
+
+                st.markdown(
+                    f"**{random_forest['model_name']}**\n\n"
+                    f"Test R²: **{random_forest['r2_score']}**\n\n"
+                    f"Test MAE: **{random_forest['mae']}**"
+                )
+
+            else:
+
+                st.warning(
+                    random_forest.get(
+                        "error", "Random Forest unavailable."
+                    )
+                )
+
+        with xgb_col:
+
+            if xgboost_result.get("available"):
+
+                st.markdown(
+                    f"**{xgboost_result['model_name']}**\n\n"
+                    f"Test R²: **{xgboost_result['r2_score']}**\n\n"
+                    f"Test MAE: **{xgboost_result['mae']}**"
+                )
+
+            else:
+
+                st.warning(
+                    xgboost_result.get(
+                        "error", "XGBoost unavailable."
+                    )
+                )
+
+        st.caption(
+            "These are the actual metrics from whichever model(s) "
+            "are running right now, computed on held-out data they "
+            "were not trained on — not hard-coded placeholder "
+            "numbers. If only one model is available, the ML "
+            "estimate is that one model's prediction alone."
+        )
+
+        if random_forest.get("available"):
+
+            with st.expander(
+                "📊 Random Forest feature importances"
+            ):
+
+                importances_df = pd.DataFrame(
+                    sorted(
+                        random_forest["feature_importances"].items(),
+                        key=lambda item: -item[1]
+                    ),
+                    columns=["Feature", "Importance"]
+                )
+
+                st.dataframe(
+                    importances_df,
+                    width="stretch",
+                    hide_index=True
+                )
 
     else:
 
@@ -6223,14 +6330,16 @@ def render_model_information_panel():
     hybrid_text = _html_no_indent(f"""
     **Hybrid Combination**
 
+    P_ml = 0.5 x Random Forest prediction + 0.5 x XGBoost
+    prediction (whichever are available).
+
     Final probability = **{hybrid_model.HYBRID_ML_WEIGHT * 100:.0f}%
-    x ML prediction + {hybrid_model.HYBRID_PHYSICS_WEIGHT * 100:.0f}%
-    x physics-only estimate** (when the ML component is
-    available; physics-only otherwise). The ML model's own inputs
-    already include every physics-derived feature above, so the
-    physics component shapes the final result twice over — once
-    through those learned features, and once directly in this
-    blend.
+    x P_ml + {hybrid_model.HYBRID_PHYSICS_WEIGHT * 100:.0f}%
+    x P_physics** — weighting the data-driven estimate more
+    heavily while retaining the physics-based estimate as a
+    stabilizing prior. If no ML model is available at all, the
+    result is P_physics alone, so the pipeline stays operational
+    either way.
     """)
 
     st.markdown(hybrid_text)
@@ -7092,12 +7201,16 @@ def admin_dashboard(district=None):
             latitude = st.number_input(
                 "Latitude",
                 value=23.8103,
+                min_value=-90.0,
+                max_value=90.0,
                 format="%.6f"
             )
 
             longitude = st.number_input(
                 "Longitude",
                 value=90.4125,
+                min_value=-180.0,
+                max_value=180.0,
                 format="%.6f"
             )
 
@@ -7126,6 +7239,11 @@ def admin_dashboard(district=None):
             if st.button(
                 "➕ Register Sensor"
             ):
+
+                # Trim stray spaces (see the matching fix in
+                # sensor_and_dataset_management_section).
+                sensor_id = (sensor_id or "").strip()
+                location = (location or "").strip()
 
                 if district and location not in district_areas:
 
@@ -7189,7 +7307,9 @@ def admin_dashboard(district=None):
                             "Sensor ID already exists."
                         )
 
-                    conn.close()
+                    finally:
+
+                        conn.close()
 
                 else:
 
@@ -8659,6 +8779,10 @@ def system_handler_dashboard():
 
     division_summaries = []
 
+    unread_by_mailbox = (
+        get_unread_emergency_alert_counts_by_recipient()
+    )
+
     for division in BD_DIVISIONS:
 
         area_list = DIVISION_AREAS.get(division, [])
@@ -8689,16 +8813,16 @@ def system_handler_dashboard():
 
             high_risk_count = 0
 
-        unread_total = get_unread_emergency_alert_count(
-            mailbox_key("Division Admin", division)
+        unread_total = unread_by_mailbox.get(
+            mailbox_key("Division Admin", division), 0
         )
 
         for org_role in (
             "Police", "Fire Service", "Hospital", "Municipality"
         ):
 
-            unread_total += get_unread_emergency_alert_count(
-                mailbox_key(org_role, division)
+            unread_total += unread_by_mailbox.get(
+                mailbox_key(org_role, division), 0
             )
 
         division_summaries.append(
@@ -8796,6 +8920,10 @@ def system_handler_dashboard():
 
     district_rows = []
 
+    unread_by_mailbox = (
+        get_unread_emergency_alert_counts_by_recipient()
+    )
+
     for district_name in DISTRICT_NAMES:
 
         division_of_district = get_division_for_location(
@@ -8833,8 +8961,8 @@ def system_handler_dashboard():
 
             risk = None
 
-        district_unread = get_unread_emergency_alert_count(
-            mailbox_key("District Admin", district_name)
+        district_unread = unread_by_mailbox.get(
+            mailbox_key("District Admin", district_name), 0
         )
 
         for org_role in (
@@ -8842,8 +8970,8 @@ def system_handler_dashboard():
             "District Municipality"
         ):
 
-            district_unread += get_unread_emergency_alert_count(
-                mailbox_key(org_role, district_name)
+            district_unread += unread_by_mailbox.get(
+                mailbox_key(org_role, district_name), 0
             )
 
         district_rows.append(
