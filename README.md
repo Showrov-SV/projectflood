@@ -395,6 +395,8 @@ shows every relevant location's current risk before you even pick
 one. (Removed from the Admin's nationwide Location Selection, since
 that list mixes in many cities with no sensor data yet and just
 became visual noise there.)
+<img width="1885" height="805" alt="Screenshot 2026-10-11 210749" src="https://github.com/user-attachments/assets/caa90d3f-43bc-4d70-8ee3-5d1f7d0c7d8e" />
+
 
 ### 10. 🚨 Emergency Alert System (blinking + sound)
 When an alert is created — manually via the siren, or automatically
