@@ -51,7 +51,6 @@ the responding services in one application.
 - [Districts](#districts)
 - [Application details](#application-details)
 - [Configuration reference](#configuration-reference)
-- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Project status and roadmap](#project-status-and-roadmap)
 - [Project information](#project-information)
@@ -80,20 +79,21 @@ the responding services in one application.
 7. **Models the network** in a digital twin engine (no dashboard tab at present; see [Digital twin engine](#digital-twin-engine)).
 
 ## Screenshots
-
-![Figure 1: Role-Based System Interfaces](figures/figure-03-role-based-interfaces.png)
+<img width="1800" height="2620" alt="figure-03-role-based-interfaces" src="https://github.com/user-attachments/assets/2ec6e93b-4f59-45b8-b80d-27b827d8ce6f" />
 
 <p align="center"><em>Figure 1. Role-based system interfaces: (a) System Handler Interface, (b) Division Admin Interface, (c) Fire Service Interface, (d) Police Interface, (e) Hospital Interface and (f) Public Interface.</em></p>
 
-![Figure 2: System Login, Security Verification and Data Input Process](figures/figure-04-login-security-input.png)
+<img width="1800" height="2045" alt="figure-04-login-security-input" src="https://github.com/user-attachments/assets/c9f90302-f21a-4c63-9089-7743d6b93a9a" />
 
 <p align="center"><em>Figure 2. System login, security verification, and data input process: (a) Division Admin Login Interface, (b) System Handler Login using ID and Password, (c) Request for Authentication Code, and (d) Environmental data and dataset input interface.</em></p>
 
-![Figure 3: System Output and Database Results](figures/figure-05-output-and-database.png)
+<img width="1800" height="4559" alt="figure-05-output-and-database" src="https://github.com/user-attachments/assets/0c1729c5-3bd2-49f8-8544-c5f279c4f87d" />
+
 
 <p align="center"><em>Figure 3. System Output and Database results: (a) Monitoring results after login, (b) Authentication code received for System Handler verification, (c) Hybrid flood forecast results, (d) Flood-risk classification and emergency alerts, and (e) Backend SQLite database records.</em></p>
 
-![Figure 4: Communication Process with Emergency Service Agencies](figures/figure-06-emergency-communication.png)
+<img width="1800" height="1932" alt="figure-06-emergency-communication" src="https://github.com/user-attachments/assets/f634d322-ec80-4ae1-aac9-ad8b8787c951" />
+
 
 <p align="center"><em>Figure 4. Communication process with emergency service agencies: (a) an administrator sending a message to the Fire Service, (b) a record of the message sent, and (c) the message received on the Fire Service interface.</em></p>
 
@@ -207,7 +207,8 @@ in `flood_app/config.py`.
 
 ## Architecture
 
-![Figure 5: Architecture Framework and Methodology of the Proposed Flood Management System](figures/figure-01-architecture-framework.png)
+<img width="1280" height="720" alt="figure-01-architecture-framework" src="https://github.com/user-attachments/assets/832f9f75-9121-4395-8ef1-224a160087d4" />
+
 
 <p align="center"><em>Figure 5. Architecture framework and methodology of the proposed Flood Management System for Bangladesh.</em></p>
 
@@ -287,7 +288,8 @@ Everything in the device, OSPF, addressing, VLAN and server tables below was rea
 from its router and server configurations; the software holds the same design as data in
 `flood_app/network_design.py` (the single source of truth for the twin).
 
-![Figure 6: Cisco Packet Tracer Based System Architecture](figures/figure-02-packet-tracer-architecture.png)
+<img width="1337" height="631" alt="figure-02-packet-tracer-architecture" src="https://github.com/user-attachments/assets/a0f6cc01-7b87-47e2-ae30-a44f9a4309cb" />
+
 
 <p align="center"><em>Figure 6. Cisco Packet Tracer based system architecture.</em></p>
 
@@ -321,7 +323,8 @@ the ISP and cloud are outside OSPF, and Area-4 is just the workspace group for
 that path. R5, R2 and R3 are area border routers between area 1, 2, 3 and the
 backbone (area 0).
 
-![Figure 7: Multi-Area OSPF Architecture in Cisco Packet Tracer](figures/figure-07-ospf-architecture.png)
+<img width="1800" height="1094" alt="figure-07-ospf-architecture" src="https://github.com/user-attachments/assets/245a8f05-8cb4-4f72-9f40-41ec327fb8ab" />
+
 
 <p align="center"><em>Figure 7. Multi-area OSPF architecture in Cisco Packet Tracer (workspace areas 0 to 4).</em></p>
 
@@ -377,7 +380,7 @@ path the digital twin traces (see [How the software models the network](#how-the
 Data flow: **IoT devices -> Wireless Router0 -> Switch0 -> R5 -> R0 -> network areas and central services.**
 Server0 registers the local IoT devices and carries out the monitoring.
 
-![Figure 8: Packet Tracer IoT Monitoring Interface](figures/figure-15-packet-tracer-iot-monitoring.png)
+<img width="1800" height="1650" alt="figure-15-packet-tracer-iot-monitoring" src="https://github.com/user-attachments/assets/6b8eacfa-986b-46f0-8ad3-663f98c2f3ef" />
 
 <p align="center"><em>Figure 8. The IoT registration server login at flood.local, and the IoT Server device page showing the water level, temperature and humidity monitors and the siren.</em></p>
 
@@ -1274,16 +1277,6 @@ admin_2fa_email = "address that receives the code"
   `WATER_LEVEL_RESPONSE`, `RANDOM_FOREST_PARAMS`, `XGBOOST_PARAMS`,
   `HYBRID_ML_WEIGHT`, `HYBRID_PHYSICS_WEIGHT`.
 
-## Testing
-
-Automated tests are **not included in this release.** An earlier version of
-this README described a pytest suite of about 100 tests under `tests/`, but
-that folder is not part of this archive (only `pytest.ini` is present), so no
-test results are claimed here. If the suite exists in the GitHub repository,
-copy its `tests/` folder into the project root and run `python -m pytest`.
-
-What can be reproduced today is the model evaluation in the [Prediction model](#prediction-model) section (one
-command, fixed random seed).
 
 ## Troubleshooting
 
@@ -1336,7 +1329,6 @@ command, fixed random seed).
   to real-data-only, so locations without real data show "no data".
 - The real-sensor entry point (`ingest_sensor_reading`) exists, but no
   network transport (HTTP/MQTT/serial) is implemented yet.
-- Automated tests are not included in this release (see the [Testing](#testing) section).
 
 ### Roadmap
 
