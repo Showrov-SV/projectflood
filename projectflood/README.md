@@ -1375,7 +1375,7 @@ Planned next steps, in order of importance:
 | Version control | Git |
 | Languages and tools | Python, HTML/CSS (through Streamlit), SQLite |
 | Main dependencies | Streamlit, pandas, NumPy, Plotly, OpenPyXL, scikit-learn, XGBoost, streamlit-cookies-controller (`requirements.txt`) |
-| Authors | Showrov, Sha Farzeen Hossain, Md. Al-Amin Hossian |
+| Authors | Md. Abdullah Abu Sayem, Shah Farzeen Hossain, Md. Al-Amin Hossen |
 | Support | farzeenhossain10@gmail.com / showrovjfcl@gmail.com |
 
 ## Contributing
