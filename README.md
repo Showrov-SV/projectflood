@@ -80,8 +80,7 @@ the responding services in one application.
 7. **Models the network** in a digital twin engine (no dashboard tab at present; see [Digital twin engine](#digital-twin-engine)).
 
 ## Screenshots
-
-![Figure 1: Role-Based System Interfaces](figures/figure-03-role-based-interfaces.png)
+<img width="1280" height="720" alt="figure-01-architecture-framework" src="https://github.com/user-attachments/assets/d398f047-633c-47bf-8841-0746453f183e" />
 
 <p align="center"><em>Figure 1. Role-based system interfaces: (a) System Handler Interface, (b) Division Admin Interface, (c) Fire Service Interface, (d) Police Interface, (e) Hospital Interface and (f) Public Interface.</em></p>
 
