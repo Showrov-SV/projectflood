@@ -86,15 +86,15 @@ the responding services in one application.
 
 <img width="1800" height="2045" alt="figure-04-login-security-input" src="https://github.com/user-attachments/assets/c9f90302-f21a-4c63-9089-7743d6b93a9a" />
 
-
 <p align="center"><em>Figure 2. System login, security verification, and data input process: (a) Division Admin Login Interface, (b) System Handler Login using ID and Password, (c) Request for Authentication Code, and (d) Environmental data and dataset input interface.</em></p>
 
-<img width="1800" height="1932" alt="figure-06-emergency-communication" src="https://github.com/user-attachments/assets/826bbea2-2295-42a3-ae65-34b7b56ed868" />
+<img width="1800" height="4559" alt="figure-05-output-and-database" src="https://github.com/user-attachments/assets/0c1729c5-3bd2-49f8-8544-c5f279c4f87d" />
 
 
 <p align="center"><em>Figure 3. System Output and Database results: (a) Monitoring results after login, (b) Authentication code received for System Handler verification, (c) Hybrid flood forecast results, (d) Flood-risk classification and emergency alerts, and (e) Backend SQLite database records.</em></p>
 
-![Figure 4: Communication Process with Emergency Service Agencies](figures/figure-06-emergency-communication.png)
+<img width="1800" height="1932" alt="figure-06-emergency-communication" src="https://github.com/user-attachments/assets/f634d322-ec80-4ae1-aac9-ad8b8787c951" />
+
 
 <p align="center"><em>Figure 4. Communication process with emergency service agencies: (a) an administrator sending a message to the Fire Service, (b) a record of the message sent, and (c) the message received on the Fire Service interface.</em></p>
 
