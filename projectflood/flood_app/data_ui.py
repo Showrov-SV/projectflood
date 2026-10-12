@@ -336,9 +336,9 @@ def dataset_upload_panel(target_location, scope_locations=None):
     scope_locations, when provided (a list of area names), scopes
     the "Data Source Status" / "Active External Datasets" views
     below to only that caller's authorized areas — used by
-    Division Admin, Division
+    Division Admin, District Admin, Division/District
     Police/Fire/Hospital/Municipality, so a scoped account never
-    sees another division's registered sensors or
+    sees another division's/district's registered sensors or
     datasets listed here. None (the default) preserves the
     original unrestricted nationwide behavior (System Handler,
     the main Administrator).
@@ -588,7 +588,7 @@ def dataset_upload_panel(target_location, scope_locations=None):
     if scope_locations is not None:
 
         # Defense in depth for the read side too: a scoped
-        # account (Division Admin, Division
+        # account (Division/District Admin, Division/District
         # org accounts) never sees another area's registered
         # sensors or uploaded datasets listed here, not just be
         # blocked from uploading to them.
@@ -748,8 +748,9 @@ def sensor_and_dataset_management_section(
     block. Used by system_handler_dashboard() (scope_locations=None,
     meaning nationwide), division_admin_dashboard()
     (scope_locations=that division's own areas), and
-    organization_dashboard() (scope_locations=that division's own
-    areas, or None for a legacy nationwide account).
+    organization_dashboard() (scope_locations=that division's or
+    district's own areas, or None for a legacy nationwide
+    account).
 
     Enforces the same restriction at BOTH the UI level (a
     selectbox instead of free text when scoped — no "type

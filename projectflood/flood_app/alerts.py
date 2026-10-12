@@ -11,6 +11,7 @@ from flood_app.config import (
 )
 from flood_app.database import get_connection
 from flood_app.geography import (
+    get_districts_for_location,
     get_division_for_location,
 )
 from flood_app.mail_roles import mailbox_key
@@ -167,8 +168,10 @@ def check_and_send_auto_alerts(readings):
     and Hospital account always receives it; if the location
     also belongs to one of the 8 divisions, that division's own
     Police/Fire Service/Hospital/Municipality/Division Admin
-    receive an additional, identically-timed copy — never any
-    unrelated division.
+    receive an additional, identically-timed copy, and every
+    District Admin/District Police/District Fire Service/
+    District Municipality whose district covers the location
+    receive one too — never any unrelated division or district.
     Called automatically from generate_all_sensor_data() — no
     admin interaction needed.
     """
@@ -212,6 +215,27 @@ def check_and_send_auto_alerts(readings):
             recipient_keys.append(
                 mailbox_key("Division Admin", division)
             )
+
+        # Also notify every District Admin, District Police,
+        # District Fire Service and District Municipality
+        # whose district includes this location (there can be
+        # more than one — e.g. both "Mymensingh" and "Jamalpur"
+        # district orgs cover the area "Jamalpur").
+        for matching_district in get_districts_for_location(
+            location
+        ):
+
+            recipient_keys.append(
+                mailbox_key("District Admin", matching_district)
+            )
+
+            recipient_keys += [
+                mailbox_key(org_role, matching_district)
+                for org_role in (
+                    "District Police", "District Fire Service",
+                    "District Municipality"
+                )
+            ]
 
         risk_level = row["risk_level"]
 

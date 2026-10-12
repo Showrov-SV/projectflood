@@ -19,6 +19,7 @@ from flood_app.alerts import (
     mark_all_emergency_alerts_read_nationwide,
 )
 from flood_app.config import (
+    DISTRICT_ORG_ROLES,
     DIVISION_ORG_ROLES,
     NO_DATA_CIRCLE,
     RISK_CIRCLE,
@@ -148,7 +149,7 @@ def count_alert_events_since(hours=24):
 
 def unread_alert_copies_by_division(unread_by_mailbox):
     """Unread alert copies per division, counting the division's
-    own Division Admin and organization accounts."""
+    own accounts AND every district account inside it."""
 
     totals = {}
 
@@ -163,12 +164,23 @@ def unread_alert_copies_by_division(unread_by_mailbox):
                 mailbox_key(org_role, division), 0
             )
 
+        for district_name in DIVISION_AREAS.get(division, []):
+
+            total += unread_by_mailbox.get(
+                mailbox_key("District Admin", district_name), 0
+            )
+
+            for org_role in DISTRICT_ORG_ROLES:
+                total += unread_by_mailbox.get(
+                    mailbox_key(org_role, district_name), 0
+                )
+
         totals[division] = total
 
     return totals
 
 
-def broadcast_recipient_keys(divisions):
+def broadcast_recipient_keys(divisions, include_districts):
     """Mailbox keys that should receive a manual System Handler
     alert for the given divisions."""
 
@@ -182,6 +194,19 @@ def broadcast_recipient_keys(divisions):
             mailbox_key(org_role, division)
             for org_role in DIVISION_ORG_ROLES
         ]
+
+        if include_districts:
+
+            for district_name in DIVISION_AREAS.get(division, []):
+
+                keys.append(
+                    mailbox_key("District Admin", district_name)
+                )
+
+                keys += [
+                    mailbox_key(org_role, district_name)
+                    for org_role in DISTRICT_ORG_ROLES
+                ]
 
     return keys
 
@@ -638,6 +663,15 @@ def system_handler_dashboard():
             if level not in risk_filter:
                 continue
 
+            unread = unread_by_mailbox.get(
+                mailbox_key("District Admin", district_name), 0
+            ) + sum(
+                unread_by_mailbox.get(
+                    mailbox_key(org_role, district_name), 0
+                )
+                for org_role in DISTRICT_ORG_ROLES
+            )
+
             district_rows.append({
                 "Risk level": level,
                 "District": district_name,
@@ -653,6 +687,7 @@ def system_handler_dashboard():
                     if row is not None else None,
                 "Sensors":
                     int(row["sensors"]) if row is not None else 0,
+                "Unread alerts": int(unread),
             })
 
         if district_rows:
@@ -670,7 +705,7 @@ def system_handler_dashboard():
             })[[
                 "Risk", "District", "Division",
                 "Flood probability (%)", "Water level (m)",
-                "Rainfall (mm)", "Sensors"
+                "Rainfall (mm)", "Sensors", "Unread alerts"
             ]]
 
             st.dataframe(
@@ -824,6 +859,12 @@ def system_handler_dashboard():
                 key="sh_bc_level"
             )
 
+            bc_districts = st.checkbox(
+                "Also alert district-level accounts",
+                value=True,
+                key="sh_bc_districts"
+            )
+
             bc_title = st.text_input(
                 "Alert title",
                 key="sh_bc_title"
@@ -866,7 +907,7 @@ def system_handler_dashboard():
                     )
 
                     recipient_keys = broadcast_recipient_keys(
-                        target_divisions
+                        target_divisions, bc_districts
                     )
 
                     create_emergency_alert(

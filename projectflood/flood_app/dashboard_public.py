@@ -53,7 +53,7 @@ def public_dashboard():
     # --------------------------------------------------------
     # Two-step selector: pick one of the 8 divisions first, then
     # one of ONLY that division's real districts — matches how
-    # a Division Admin picks a location elsewhere
+    # a Division Admin/District Admin picks a location elsewhere
     # in the app, so the public portal behaves the same way.
     # --------------------------------------------------------
 

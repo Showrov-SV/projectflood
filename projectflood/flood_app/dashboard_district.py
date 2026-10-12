@@ -5,10 +5,12 @@ import pandas as pd
 import plotly.express as px
 import sqlite3
 
+from flood_app.activity_log import ACTION_SENSOR_ADDED, log_activity
 from flood_app.alert_ui import emergency_siren, render_emergency_alert_banner
 from flood_app.alerts import create_emergency_alert
 from flood_app.config import AUTO_ALERT_COOLDOWN_MINUTES
 from flood_app.data_ui import dataset_upload_panel
+from flood_app.data_mode import is_live_mode
 from flood_app.database import get_connection
 from flood_app.datasets import get_uploaded_locations
 from flood_app.geography import (
@@ -22,6 +24,7 @@ from flood_app.mail_ui import (
     email_center,
     mail_server_panel,
 )
+from flood_app.history_ui import render_history_panel
 from flood_app.maps import create_flood_map
 from flood_app.messaging import send_email
 from flood_app.prediction_ui import (
@@ -465,33 +468,42 @@ def admin_dashboard(district=None):
 
         )
 
-        simulated_count = len(
-            readings[
-                readings["data_source"]
-                == "Simulation"
-            ]
-        )
-
-        external_count = len(
-            readings[
-                readings["data_source"]
-                == "External Dataset"
-            ]
-        )
-
-        if external_count > 0:
+        if is_live_mode():
 
             st.success(
-                f"🟢 Live stream active. "
-                f"{simulated_count} simulated + "
-                f"{external_count} external dataset reading(s)."
+                f"🟢 Live mode — {len(readings)} real reading(s). "
+                f"Simulation is off."
             )
 
         else:
 
-            st.success(
-                "🟢 Live sensor simulation is active."
+            simulated_count = len(
+                readings[
+                    readings["data_source"]
+                    == "Simulation"
+                ]
             )
+
+            external_count = len(
+                readings[
+                    readings["data_source"]
+                    == "External Dataset"
+                ]
+            )
+
+            if external_count > 0:
+
+                st.success(
+                    f"🟢 Live stream active. "
+                    f"{simulated_count} simulated + "
+                    f"{external_count} external dataset reading(s)."
+                )
+
+            else:
+
+                st.success(
+                    "🟢 Live sensor simulation is active."
+                )
 
     with tab_pred:
 
@@ -982,6 +994,14 @@ def admin_dashboard(district=None):
 
                         conn.commit()
 
+                        log_activity(
+                            ACTION_SENSOR_ADDED,
+                            details=(
+                                f"{sensor_id} ({sensor_type}) at "
+                                f"{location}"
+                            )
+                        )
+
                         st.success(
                             "Sensor registered successfully."
                         )
@@ -1034,3 +1054,22 @@ def admin_dashboard(district=None):
             selected_location,
             scope_locations=district_areas if district else None
         )
+
+    st.divider()
+
+    # ========================================================
+    # 7. HISTORICAL DATA
+    # ========================================================
+    # Past readings and flood predictions. A District Admin sees
+    # only their own district's history; the legacy nationwide
+    # Administrator (district=None) sees every location.
+    # ========================================================
+
+    st.subheader(
+        "📜 Historical Data"
+    )
+
+    render_history_panel(
+        district_areas if district else None,
+        key_prefix=f"district_history_{district or 'national'}"
+    )

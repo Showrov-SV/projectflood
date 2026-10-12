@@ -5,13 +5,16 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Built with Streamlit](https://img.shields.io/badge/built%20with-Streamlit-ff4b4b.svg)
+[![Live demo](https://img.shields.io/badge/live%20demo-streamlit.app-ff4b4b.svg)](https://bonnaguard.streamlit.app/)
+
+**Live demo: https://bonnaguard.streamlit.app/**
 
 BonnaGuard is a Streamlit web application that monitors flood risk for all 64
 districts in Bangladesh's 8 divisions. It predicts flood risk with a hybrid
 physics + machine-learning model, raises emergency alerts, and connects the
-System Handler, the Division Admins and the divisional Police, Fire Service,
-Hospital and Municipality accounts through role-scoped dashboards and
-messaging. The network behind it is prototyped in Cisco Packet Tracer
+System Handler, the Division Admins, the District Admins and the divisional and
+district Police, Fire Service, Hospital and Municipality accounts through
+role-scoped dashboards and messaging. The network behind it is prototyped in Cisco Packet Tracer
 (multi-area OSPF, departmental VLANs, central servers, IoT sensing and a local
 alarm), and the project documents that design alongside the software.
 
@@ -34,6 +37,7 @@ the responding services in one application.
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Getting started](#getting-started)
+  - [Live demo](#live-demo)
 - [Usage](#usage)
 - [Use cases](#use-cases)
 - [Architecture](#architecture)
@@ -44,6 +48,7 @@ the responding services in one application.
 - [Prediction model](#prediction-model)
 - [Data modes and automatic retraining](#data-modes-and-automatic-retraining)
 - [Roles and access control](#roles-and-access-control)
+- [Districts](#districts)
 - [Application details](#application-details)
 - [Configuration reference](#configuration-reference)
 - [Testing](#testing)
@@ -60,37 +65,52 @@ the responding services in one application.
    sensor readings (simulation mode) or from uploaded datasets and real
    sensors (live mode), as a flood probability, a predicted water level and a
    Low/Moderate/High/Severe classification.
-2. **Enforces a role hierarchy**: one System Handler, 8 Division Admins and
+2. **Covers the whole country at district level**: 64 districts in 8 divisions, each with a default sensor, a map marker, its own risk status and its own accounts (the [Districts](#districts) section).
+3. **Enforces a role hierarchy**: one System Handler, 8 Division Admins and
    each division's Police, Fire Service, Hospital and Municipality accounts
-   (41 accounts), each limited to its own geography in the backend, not just
-   in the interface. The 64 districts are monitored locations, not account
-   levels.
-3. **Alerts the right people automatically** when a location reaches Severe
+   (41 accounts), plus a District Admin and a District Police, Fire Service
+   and Municipality account for each of the 64 districts (256 more, 297 in
+   total), each limited to its own geography in the backend, not just in the
+   interface.
+4. **Alerts the right people automatically** when a location reaches Severe
    risk, and lets administrators message each other and the services.
-4. **Keeps history** of readings and predictions for review.
-5. **Switches to live mode** when real data arrives and **retrains the
+5. **Keeps history** of readings and predictions for review.
+6. **Switches to live mode** when real data arrives and **retrains the
    prediction models** on it automatically, with safety checks (the [Data modes and automatic retraining](#data-modes-and-automatic-retraining) section).
-6. **Models the network** in a digital twin engine (no dashboard tab at present; see [Digital twin engine](#digital-twin-engine)).
+7. **Models the network** in a digital twin engine (no dashboard tab at present; see [Digital twin engine](#digital-twin-engine)).
 
 ## Screenshots
 
-![Figure 3: Role-Based System Interfaces](figures/figure-03-role-based-interfaces.png)
+![Figure 1: Role-Based System Interfaces](figures/figure-01-role-based-interfaces.png)
 
-<p align="center"><em>Figure 3. Role-based system interfaces: (a) System Handler Interface, (b) Division Admin Interface, (c) Fire Service Interface, (d) Police Interface, (e) Hospital Interface and (f) Public Interface.</em></p>
+<p align="center"><em>Figure 1. Role-based system interfaces: (a) System Handler Interface, (b) Division Admin Interface, (c) Fire Service Interface, (d) Police Interface, (e) Hospital Interface and (f) Public Interface.</em></p>
 
-![Figure 4: System Login, Security Verification and Data Input Process](figures/figure-04-login-security-input.png)
+![Figure 2: System Login, Security Verification and Data Input Process](figures/figure-02-login-security-input.png)
 
-<p align="center"><em>Figure 4. System login, security verification, and data input process: (a) Division Admin Login Interface, (b) System Handler Login using ID and Password, (c) Request for Authentication Code, and (d) Environmental data and dataset input interface.</em></p>
+<p align="center"><em>Figure 2. System login, security verification, and data input process: (a) Division Admin Login Interface, (b) System Handler Login using ID and Password, (c) Request for Authentication Code, and (d) Environmental data and dataset input interface.</em></p>
 
-![Figure 5: System Output and Database Results](figures/figure-05-output-and-database.png)
+![Figure 3: System Output and Database Results](figures/figure-03-output-and-database.png)
 
-<p align="center"><em>Figure 5. System Output and Database results: (a) Monitoring results after login, (b) Authentication code received for System Handler verification, (c) Hybrid flood forecast results, (d) Flood-risk classification and emergency alerts, and (e) Backend SQLite database records.</em></p>
+<p align="center"><em>Figure 3. System Output and Database results: (a) Monitoring results after login, (b) Authentication code received for System Handler verification, (c) Hybrid flood forecast results, (d) Flood-risk classification and emergency alerts, and (e) Backend SQLite database records.</em></p>
 
-![Figure 6: Communication Process with Emergency Service Agencies](figures/figure-06-emergency-communication.png)
+![Figure 4: Communication Process with Emergency Service Agencies](figures/figure-04-emergency-communication.png)
 
-<p align="center"><em>Figure 6. Communication process with emergency service agencies: (a) an administrator sending a message to the Fire Service, (b) a record of the message sent, and (c) the message received on the Fire Service interface.</em></p>
+<p align="center"><em>Figure 4. Communication process with emergency service agencies: (a) an administrator sending a message to the Fire Service, (b) a record of the message sent, and (c) the message received on the Fire Service interface.</em></p>
 
 ## Getting started
+
+### Live demo
+
+The application is deployed on Streamlit Community Cloud:
+**https://bonnaguard.streamlit.app/**. The public portal needs no login. To try
+a role, use a demo account (the [Demo accounts](#demo-accounts) section).
+The System Handler also needs the emailed one-time code, which requires the
+email settings in the [Configuration reference](#configuration-reference)
+section. On Streamlit Cloud, put those settings under the app's **Settings →
+Secrets**, not in a committed file. A free Streamlit Cloud app goes to sleep
+when unused (the first visit may take a moment to wake it) and its local
+`flood_monitoring.db` is not guaranteed to persist across restarts, so stored
+history and uploaded datasets may be reset.
 
 ### Prerequisites
 
@@ -111,7 +131,7 @@ python -m streamlit run flooddashboard.py
 ```
 
 The app opens in the browser (default http://localhost:8501). On first run it
-creates `flood_monitoring.db` with the 41 demo accounts and the default
+creates `flood_monitoring.db` with the 297 demo accounts and the default
 sensors. Every table uses `CREATE TABLE IF NOT EXISTS` and columns are added
 with safe migrations, so an existing database is upgraded in place.
 
@@ -129,7 +149,7 @@ with safe migrations, so an existing database is upgraded in place.
 2. To try a role, log in from the sidebar with a demo account (the [Demo accounts](#demo-accounts) section).
    The System Handler also needs the emailed one-time code, which requires
    the email settings in the [Configuration reference](#configuration-reference) section.
-3. The first start creates `flood_monitoring.db` with 41 demo accounts and the
+3. The first start creates `flood_monitoring.db` with 297 demo accounts and the
    default sensors, and trains the prediction models once (a few seconds).
 
 Where things are defined: formulas and model settings in `hybrid_model.py`,
@@ -148,8 +168,11 @@ in `flood_app/config.py`.
    Alerts, Messages, Data and Activity.
 4. **Division Admin:** monitor the division, add sensors or upload datasets
    (own division only), send alerts and messages, review Historical Data.
-5. **Police / Fire Service / Hospital / Municipality:** view the division's
-   map, readings, prediction, alerts, history and mailbox. Click **Mark
+   **District Admin:** the same for a single district (own district only),
+   with its own map, prediction, messaging, siren and Historical Data.
+5. **Police / Fire Service / Hospital / Municipality** (division level), and
+   **District Police / Fire Service / Municipality** (district level): view the
+   division's or district's map, readings, prediction, alerts, history and mailbox. Click **Mark
    Emergency Alerts as Read** to stop the siren and banner for that account.
 6. **Real data and models (System Handler):** load a dataset under Sensors &
    Data (add a flood outcome column to teach the model real outcomes). The
@@ -164,8 +187,10 @@ in `flood_app/config.py`.
   decisions by people living in risk zones.
 - **Role distribution and emergency services.** The country is divided into
   divisions. Each division's Police, Fire Service, Hospital and Municipality
-  accounts are connected to their Division Admin, and a central System Handler
-  controls and communicates with the Division Admins. Emergency alerts are sent
+  accounts are connected to their Division Admin, each district has its own
+  District Admin with district-level Police, Fire Service and Municipality
+  accounts, and a central System Handler controls and communicates with the
+  Division Admins. Emergency alerts are sent
   when any area of any division reaches flood risk, and the services can message
   each other.
 - **Hybrid prediction that keeps working.** The prediction combines a
@@ -182,9 +207,9 @@ in `flood_app/config.py`.
 
 ## Architecture
 
-![Figure 1: Architecture Framework and Methodology of the Proposed Flood Management System](figures/figure-01-architecture-framework.png)
+![Figure 5: Architecture Framework and Methodology of the Proposed Flood Management System](figures/figure-05-architecture-framework.png)
 
-<p align="center"><em>Figure 1. Architecture framework and methodology of the proposed Flood Management System for Bangladesh.</em></p>
+<p align="center"><em>Figure 5. Architecture framework and methodology of the proposed Flood Management System for Bangladesh.</em></p>
 
 ### Layers
 
@@ -220,14 +245,6 @@ in `flood_app/config.py`.
    responsible accounts.
 6. Each dashboard shows only its own scope: map, gauge, readings, alerts,
    history, messages.
-
-<!-- Figure 8 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: flowchart of steps 1–6 above: data source (simulation / uploaded file) → validation and cleaning → hybrid prediction → risk classification → storage → automatic alert routing → role dashboards and digital twin
-
-![Figure 8: Data-Processing and Alert Workflow](figures/figure-08-data-processing-workflow.png)
-
-<p align="center"><em>Figure 8. Runtime data flow from sensor input to alerts and dashboards.</em></p>
--->
 
 ### Architecture blocks
 
@@ -270,9 +287,9 @@ Everything in the device, OSPF, addressing, VLAN and server tables below was rea
 from its router and server configurations; the software holds the same design as data in
 `flood_app/network_design.py` (the single source of truth for the twin).
 
-![Figure 2: Cisco Packet Tracer Based System Architecture](figures/figure-02-packet-tracer-architecture.png)
+![Figure 6: Cisco Packet Tracer Based System Architecture](figures/figure-06-packet-tracer-architecture.png)
 
-<p align="center"><em>Figure 2. Cisco Packet Tracer based system architecture.</em></p>
+<p align="center"><em>Figure 6. Cisco Packet Tracer based system architecture.</em></p>
 
 ### Device inventory
 
@@ -360,9 +377,9 @@ path the digital twin traces (see [How the software models the network](#how-the
 Data flow: **IoT devices -> Wireless Router0 -> Switch0 -> R5 -> R0 -> network areas and central services.**
 Server0 registers the local IoT devices and carries out the monitoring.
 
-![Figure 15: Packet Tracer IoT Monitoring Interface](figures/figure-15-packet-tracer-iot-monitoring.png)
+![Figure 8: Packet Tracer IoT Monitoring Interface](figures/figure-08-packet-tracer-iot-monitoring.png)
 
-<p align="center"><em>Figure 15. The IoT registration server login at flood.local, and the IoT Server device page showing the water level, temperature and humidity monitors and the siren.</em></p>
+<p align="center"><em>Figure 8. The IoT registration server login at flood.local, and the IoT Server device page showing the water level, temperature and humidity monitors and the siren.</em></p>
 
 ### How the software models the network
 
@@ -416,14 +433,6 @@ model, whose alerts are triggered by the predicted flood probability (the
 
 ---
 
-<!-- Figure 14 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: two Packet Tracer screenshots: the "Flood Alert" rule in the IoT monitoring interface on Server0 (water level, wind, temperature and humidity conditions leading to the siren) and the emergency flood alert web page on Web-Server
-
-![Figure 14: Packet Tracer Local Alarm Rule and Emergency Alert Page](figures/figure-14-packet-tracer-alarm-rule.png)
-
-<p align="center"><em>Figure 14. The prototype's local alarm: the Flood Alert rule that switches the siren on, and the emergency alert page.</em></p>
--->
-
 ## From the Packet Tracer prototype to the software
 
 The Packet Tracer network is used as a digital twin of the intended system: a
@@ -457,7 +466,7 @@ flooddashboard.py        entry point: page setup and role routing
 hybrid_model.py          physics + machine-learning prediction framework
 flood_app/               application code, one file per responsibility
     config.py              settings (login/OTP limits, refresh timer, thresholds, colours)
-    geography.py           divisions, districts, coordinates, lookups
+    geography.py           divisions, the 64 districts, coordinates, district/division lookups
     mail_roles.py          internal mail roles / mailbox keys
     database.py            SQLite connection, table creation, account seeding
     auth.py                login, admin lockout, email OTP (2FA), trusted devices
@@ -482,8 +491,9 @@ flood_app/               application code, one file per responsibility
     twin_ui.py             digital-twin panel (not used by any dashboard at present)
     history_ui.py          historical readings chart, table and CSV download
     dashboard_public.py    public dashboard
+    dashboard_district.py  District Admin dashboard
     dashboard_division.py  Division Admin dashboard
-    dashboard_org.py       Police / Fire Service / Hospital / Municipality portals
+    dashboard_org.py       Police / Fire Service / Hospital / Municipality portals (division level) and District Police / Fire Service / Municipality portals (district level)
     dashboard_system_handler.py  System Handler control center
 .streamlit/secrets.toml  email settings for the System Handler's one-time code
 ```
@@ -600,20 +610,12 @@ the physics score uses the five variables above. The ML models' own inputs alrea
 include every physics-derived feature, so physics shapes the result twice
 over.
 
-**Where this shows up in the UI**: the Division Admin
-dashboard show a "Predicted Water Level" metric and an expandable
+**Where this shows up in the UI**: the District Admin and Division Admin
+dashboards show a "Predicted Water Level" metric and an expandable
 "How this prediction was produced" explanation. Police, Fire Service,
 Hospital, Municipality, and the Public Portal deliberately do **not**
 show any of this — no "Hybrid Physics + ML" label, no model name, no
 feature importances — those views just show the risk status itself.
-
-<!-- Figure 9 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: block diagram: seven raw sensor readings → physics score S → P_physics (sigmoid) and water-level estimate; raw readings + S + P_physics + estimate → Random Forest and XGBoost → P_ml = 0.5/0.5 average; P_hybrid = 0.60·P_ml + 0.40·P_physics; fallback arrow to P_physics when ML is unavailable
-
-![Figure 9: Hybrid Prediction Pipeline](figures/figure-09-prediction-pipeline.png)
-
-<p align="center"><em>Figure 9. Prediction pipeline of the hybrid model.</em></p>
--->
 
 ### Training data and simulation procedure
 
@@ -690,14 +692,6 @@ hybrid is clearly better than physics alone and close to the ML ensemble
 alone, trading a little synthetic accuracy for the physics prior and the
 fallback. Monotonicity was checked numerically: along sweeps of each physical
 driver (200 random sweeps) the hybrid output never decreased.
-
-<!-- Figure 10 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: bar chart of R² and MAE for physics-only, Random Forest, XGBoost, ML ensemble and hybrid (values from the table in 6.4), or a predicted-vs-label scatter of the hybrid on the 1,000 test samples
-
-![Figure 10: Model Evaluation Results](figures/figure-10-model-evaluation.png)
-
-<p align="center"><em>Figure 10. Held-out performance of each component on synthetic data. Not a measure of real-flood accuracy.</em></p>
--->
 
 ### Risk thresholds
 
@@ -801,14 +795,6 @@ floods, only more familiar with the data's ranges.
 
 ## Roles and access control
 
-<!-- Figure 11 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: tree: System Handler → 8 Division Admins → each division's Police, Fire Service, Hospital and Municipality accounts (41 accounts); public portal shown separately with no login
-
-![Figure 11: Account and Role Hierarchy](figures/figure-11-role-hierarchy.png)
-
-<p align="center"><em>Figure 11. Role hierarchy and scope of each account type.</em></p>
--->
-
 ```
                        System Handler
                               │
@@ -819,9 +805,17 @@ Show: tree: System Handler → 8 Division Admins → each division's Police, Fir
           Division Admin, Division Police, Division Fire
           Service, Division Hospital, Division Municipality
                  (5 accounts × 8 divisions = 40)
+                              │
+                    ┌─────────┴─────────┐
+                    │    64 Districts    │
+                    └─────────┬─────────┘
+                              │
+          District Admin, District Police, District
+          Fire Service, District Municipality
+                 (4 accounts × 64 districts = 256)
 ```
 
-**Total accounts: 41** (1 + 40).
+**Total accounts: 297** (1 + 40 + 256).
 
 - **System Handler** — the sole national-level account (Administrator
   2FA applies here). Sees all 8 divisions, all 64 monitored districts,
@@ -829,19 +823,22 @@ Show: tree: System Handler → 8 Division Admins → each division's Police, Fir
   any Division Admin individually or all of them at once.
 - **Division Admin** — administrator capabilities restricted to their
   own division's districts only.
+- **District Admin** — the same dashboard again, restricted to their
+  own single district.
 - **Division Police, Fire Service, Hospital, Municipality** — each sees
   only their own division's map, live sensor readings, and prediction;
   each has its own private mailbox and emergency-alert state,
   completely isolated from every other account.
+- **District Police, Fire Service, Municipality** — the same, but
+  limited to their own single district; each has its own private
+  mailbox and emergency-alert state.
 
-There is no District Admin tier and there are no district-level
-accounts (an older build had 256 of them; they are removed
-automatically from any older database on startup, together with their
-mailbox and alert-read rows).
+**Note on Hospital**: Hospital accounts exist at the **division** level
+only. There is no District Hospital account.
 
 ### Sensor and dataset access
 
-**Only System Handler and Division Admins can
+**Only System Handler, Division Admins and District Admins can
 register sensors or upload CSV/XLSX datasets.** Police, Fire Service,
 Hospital, and Municipality accounts — at every level — have zero
 access to sensor registration or dataset upload; they are monitoring
@@ -856,6 +853,8 @@ at the database-write level, not just in the UI:
 - A Division Admin's sensor form only offers their own division's
   districts, **and** the backend independently rejects any submission
   outside that division even if the UI restriction were bypassed.
+- A District Admin's form is restricted the same way to their single
+  district.
 
 ### Demo accounts
 
@@ -873,14 +872,145 @@ Credentials follow a predictable pattern:
 | System Handler | `system_handler` | `syshandler123` |
 | Division Admin | `<division>_admin` | `<division>admin123` |
 | Division Police/Fire/Hospital/Municipality | `<division>_police` etc. | `<division>police123` etc. |
+| District Admin | `admin_<district>` | `<district>district123` |
+| District Police | `<district>_district_police` | `<district>districtpolice123` |
+| District Fire Service | `<district>_district_fire` | `<district>districtfire123` |
+| District Municipality | `<district>_district_municipality` | `<district>districtmunicipality123` |
 
-(division names lowercased, e.g. `dhaka_admin` / `dhakaadmin123`.) Query
+(division and district names lowercased with spaces and punctuation removed,
+e.g. `dhaka_admin` / `dhakaadmin123`, `admin_coxsbazar` /
+`coxsbazardistrict123`, `dhaka_district_police` /
+`dhakadistrictpolice123`. The district names are listed in the
+[Districts](#districts) section.) Query
 the `users` table directly if you need the exact list for your
 database — see below.
 
 The login form is a proper Streamlit form: press **Enter** after
 typing your password instead of clicking **Login**; same at the OTP
 step.
+
+---
+
+## Districts
+
+The 64 districts (zilas) of Bangladesh are the finest level this system works
+at. Every district is a sensor location, a marker on the map, an entry on the
+public portal and the History selector, and the scope of its own set of
+accounts. There is no level below the district.
+
+### The 64 districts by division
+
+| Division | Districts | Count |
+|---|---|---|
+| Dhaka | Dhaka, Faridpur, Gazipur, Gopalganj, Kishoreganj, Madaripur, Manikganj, Munshiganj, Narayanganj, Narsingdi, Rajbari, Shariatpur, Tangail | 13 |
+| Chattogram | Bandarban, Brahmanbaria, Chandpur, Chattogram, Cumilla, Cox's Bazar, Feni, Khagrachhari, Lakshmipur, Noakhali, Rangamati | 11 |
+| Rajshahi | Bogura, Joypurhat, Naogaon, Natore, Chapainawabganj, Pabna, Rajshahi, Sirajganj | 8 |
+| Khulna | Bagerhat, Chuadanga, Jashore, Jhenaidah, Khulna, Kushtia, Magura, Meherpur, Narail, Satkhira | 10 |
+| Barishal | Barguna, Barishal, Bhola, Jhalokati, Patuakhali, Pirojpur | 6 |
+| Sylhet | Habiganj, Moulvibazar, Sunamganj, Sylhet | 4 |
+| Rangpur | Dinajpur, Gaibandha, Kurigram, Lalmonirhat, Nilphamari, Panchagarh, Rangpur, Thakurgaon | 8 |
+| Mymensingh | Jamalpur, Mymensingh, Netrokona, Sherpur | 4 |
+| **Total** | | **64** |
+
+### How districts are defined
+
+Everything about districts lives in `flood_app/geography.py`:
+
+- `DISTRICT_COORDINATES` gives each district a latitude and longitude (its
+  headquarters town), used for the map and for the default sensors.
+- `DIVISION_AREAS` maps each division to its districts. It is the single
+  source of truth: the 64-name list `DISTRICT_NAMES`, the account seeding, the
+  default sensors and every division-level scope are built from it, so they
+  cannot drift apart.
+- `DISTRICT_AREAS` maps a district to a list holding only itself, because a
+  district has no sub-areas. `get_district_areas(district)` returns that list,
+  or an empty list for an unknown district (callers treat this as "nothing
+  allowed", never as "everything allowed").
+- `get_division_for_location()` and `get_districts_for_location()` look up the
+  division or district a location belongs to, ignoring case and stray
+  spaces. The alert system uses them to decide who must be told.
+
+On first start `database.py` registers one default sensor per district
+(`D-001` to `D-064`, type Water Level), so every district has a reading in
+simulation mode. More sensors can be added to a district later; where a
+district has several, its overview shows the worst one. In live mode a
+district with no real reading shows "no data" instead of a simulated value.
+
+### District accounts
+
+Each district has four accounts (256 in total), separate from the division
+accounts. They store the district in their own `district` field, with the
+division and area fields empty, so a district account can never be mistaken
+for a division account. Their roles start with "District", and their mailbox
+key is the district name plus the role, for example `Dhaka District Admin`.
+
+| Role | Username pattern | Password pattern | Example |
+|---|---|---|---|
+| District Admin | `admin_<district>` | `<district>district123` | `admin_dhaka` |
+| District Police | `<district>_district_police` | `<district>districtpolice123` | `dhaka_district_police` |
+| District Fire Service | `<district>_district_fire` | `<district>districtfire123` | `dhaka_district_fire` |
+| District Municipality | `<district>_district_municipality` | `<district>districtmunicipality123` | `dhaka_district_municipality` |
+
+District names are lowercased with spaces and punctuation removed (Cox's Bazar
+becomes `coxsbazar`). There is no District Hospital account: Hospital exists
+at the division level only. Every username follows the patterns above, using
+the district names in the table at the top of this section. These are demo
+credentials; change them before any real use.
+
+### What a district account can do
+
+**District Admin** (`dashboard_district.py`) uses the same kind of control
+center as a Division Admin, limited to one district:
+
+- Summary metrics (readings, High and Severe counts, average flood probability).
+- Location selection that offers only the admin's own district. Typing a
+  free-text location is not offered.
+- A live flood map centered on the district, and the current prediction with
+  risk badge, water level, rainfall, river flow, probability gauge and the
+  prediction details.
+- Sensor and monitoring information: live readings, prediction overview and
+  charts.
+- Emergency response: **District Messaging** to the Police, Fire Service,
+  Hospital and Municipality accounts of the parent division, **My Mailbox**
+  and a **Siren** that sends an emergency alert to those same accounts.
+- Sensor registration and dataset upload, for the admin's own district only.
+  The sensor form offers only that district, and the backend rejects any
+  other location even if the form were bypassed.
+- **Historical Data** for the district (the [Historical data](#historical-data)
+  section).
+
+**District Police, Fire Service and Municipality** use the same portal as their
+division-level counterparts, limited to one district: the district's map,
+readings, prediction, alerts, history and mailbox. They can message their own
+District Admin. Like every Police, Fire Service, Hospital and Municipality
+account, they cannot register sensors or upload datasets.
+
+### Where districts appear in the rest of the system
+
+- **Public portal:** cascading Division → District selectors (the
+  [Public portal](#public-portal) section).
+- **System Handler:** the **Districts** tab lists all 64 districts, searchable
+  and filterable by division and risk level, with a flood-probability bar, the
+  worst-sensor reading, the number of sensors, the unread alert count and a
+  CSV download. The alert broadcast has an "Also alert district-level
+  accounts" option (on by default), and the unread-alert count per division
+  includes the division's district accounts.
+- **Division Admin and division organizations:** see only the districts of
+  their own division and can choose any one of them.
+- **Alerts:** when a district reaches Severe risk, the alert goes to that
+  district's District Admin, District Police, District Fire Service and
+  District Municipality, in addition to the division accounts and the System
+  Handler (the [Emergency alerts](#emergency-alerts) section). Other districts
+  are never told.
+- **History:** a district account sees only its own district in the selector;
+  the System Handler sees all 64.
+
+### Adding or changing a district
+
+- Change a district's position by editing `DISTRICT_COORDINATES`.
+- Add or move a district by editing `DIVISION_AREAS` (and giving it
+  coordinates). The next start creates its default sensor and its four
+  accounts automatically; existing accounts are not touched.
 
 ---
 
@@ -905,12 +1035,14 @@ switching back to simulation (done in code only).
 - **Automatic**: the moment any location's prediction reaches
   **Severe (≥90%)**, an alert fires with no admin click needed —
   routed to that location's division-level Police/Fire
-  Service/Hospital/Municipality, its Division Admin, and System
+  Service/Hospital/Municipality, its Division Admin, that district's
+  District Admin and District Police/Fire Service/Municipality, and System
   Handler. A 5-minute
   per-location cooldown prevents the same location from spamming new
   alerts every time the simulator re-randomizes its readings.
-- **Manual**: Division Admin and System Handler can
-  also send alerts on demand to their own scope.
+- **Manual**: Division Admin, District Admin and System Handler can
+  also send alerts on demand to their own scope. The System Handler's
+  broadcast has an "Also alert district-level accounts" option (on by default).
 - **Delivery**: a large, continuously blinking red banner plus an
   automatically-playing siren sound (offline-generated, no internet
   dependency), until **"Mark Emergency Alerts as Read"** is clicked —
@@ -958,19 +1090,13 @@ the stored-readings table and a CSV download. It appears as the
 **History** tab for the System Handler (all 64 districts) and as a
 **Historical Data** section for each Division Admin and each division
 Police / Fire Service / Hospital / Municipality account, limited to
-their own division's areas. It only reads the table - nothing is
+their own division's areas, and for each District Admin and district
+Police / Fire Service / Municipality account, limited to their own
+district. It only reads the table - nothing is
 written or deleted.
 
 In live mode the history shows real readings only (`live_readings`); in
 simulation mode it shows the simulated readings (`sensor_readings`).
-
-<!-- Figure 12 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: History tab for a chosen location showing the flood-probability line chart, peak metrics, risk-level tally and the download button
-
-![Figure 12: Historical Data View](figures/figure-12-history-view.png)
-
-<p align="center"><em>Figure 12. Stored readings and predictions for one location over a selected time window.</em></p>
--->
 
 ### Digital twin engine
 
@@ -1086,14 +1212,6 @@ created on the next start and nothing is deleted. Retrained models are stored
 as `.hybrid_model_live_v<n>.joblib` files next to `hybrid_model.py` (not in
 the database).
 
-<!-- Figure 13 is not available yet. When the image is in figures/, delete the two comment lines around the image and caption below.
-Show: diagram or DB-browser screenshot of the main SQLite tables: users, sensors, sensor_readings, emergency alerts and reads, email_log, activity_log, digital_twin_state
-
-![Figure 13: Database Tables (optional)](figures/figure-13-database-schema.png)
-
-<p align="center"><em>Figure 13. Main tables of `flood_monitoring.db`.</em></p>
--->
-
 ### Front-end components
 
 The dashboards are built from a small set of components, styled with CSS:
@@ -1192,7 +1310,7 @@ command, fixed random seed).
 | Prediction | Physics score, RF + XGBoost, hybrid blend, monotone constraints, fallback, metrics | Training labels (synthetic stress function) | S coefficients, S_ref, k, water-level response, label constants | Train and calibrate on historical flood data; validate on observed events |
 | Network | Packet Tracer design; same design modelled in `network_design.py` | Packet Tracer itself is a simulator | — | Live telemetry (SNMP/ping) via `set_node_status()`; latency measurement; fix ISP return route |
 | Digital twin | Engine: topology, sensor sync, alert path, what-if analysis (no dashboard tab at present) | Infrastructure status is "Not monitored" | Tree topology (as prototype) | Redundant links, real device status |
-| Users | 41 role-scoped accounts, 2FA for System Handler, activity log | Demo credentials | — | Production account provisioning |
+| Users | 297 role-scoped accounts, 2FA for System Handler, activity log | Demo credentials | — | Production account provisioning |
 | Alerts | Automatic Severe alerts, cooldown, per-recipient read state, siren, messaging | — | 90 % Severe threshold, 5-minute cooldown | SMS/other channels |
 | Live mode and retraining | Automatic live mode, real-reading storage, `ingest_sensor_reading()`, background retraining with acceptance checks, versions, rollback | Retraining is tested with generated data only | Retrain thresholds, weights and acceptance rules | Network transport for real sensors (HTTP/MQTT); validation of retraining on observed floods |
 | Deployment | — | — | — | Hosting, hardening, agency pilot |
@@ -1252,6 +1370,7 @@ Planned next steps, in order of importance:
 |---|---|
 | Current code version | v7.5 |
 | Repository | https://github.com/Showrov-SV/projectflood |
+| Live demo | https://bonnaguard.streamlit.app/ |
 | License | MIT (see `LICENSE.txt`) |
 | Version control | Git |
 | Languages and tools | Python, HTML/CSS (through Streamlit), SQLite |
@@ -1273,7 +1392,7 @@ Released under the MIT License. See [`LICENSE.txt`](LICENSE.txt).
 
 ### Performance notes
 
-With 41 accounts and 64 monitored districts, a few things
+With 297 accounts and 64 monitored districts, a few things
 that were fine at small scale needed attention:
 
 - Emergency-alert lookups are now indexed (see above) instead of
@@ -1357,24 +1476,3 @@ restrictions are still enforced in the backend exactly as before.
 - **Risk level:** a missing probability is reported as `Unknown`, never `Severe`.
 - **Login:** usernames ignore stray spaces and letter case (phone keyboards); the admin lockout
   still counts every spelling against the same account.
-
-<!--
-FIGURE STATUS
-Done (in figures/):
-01 figure-01-architecture-framework.png
-02 figure-02-packet-tracer-architecture.png
-03 figure-03-role-based-interfaces.png
-04 figure-04-login-security-input.png
-05 figure-05-output-and-database.png (retake panel (e) from the current database)
-06 figure-06-emergency-communication.png
-07 figure-07-ospf-architecture.png
-15 figure-15-packet-tracer-iot-monitoring.png
-Still to add (the image link and caption for each are in a comment in the README; remove the comment markers once the file exists):
-08 figure-08-data-processing-workflow.png
-09 figure-09-prediction-pipeline.png
-10 figure-10-model-evaluation.png
-11 figure-11-role-hierarchy.png
-12 figure-12-history-view.png
-13 figure-13-database-schema.png (optional)
-14 figure-14-packet-tracer-alarm-rule.png
--->

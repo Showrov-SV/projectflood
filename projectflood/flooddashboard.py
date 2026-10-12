@@ -8,6 +8,7 @@ right dashboard."""
 
 import streamlit as st
 
+from flood_app.dashboard_district import admin_dashboard
 from flood_app.dashboard_division import division_admin_dashboard
 from flood_app.dashboard_org import organization_dashboard
 from flood_app.dashboard_public import public_dashboard
@@ -78,6 +79,10 @@ def main():
 
         st.session_state.area = None
 
+    if "district" not in st.session_state:
+
+        st.session_state.district = None
+
     ensure_dataset_state()
 
     # --------------------------------------------------------
@@ -96,7 +101,13 @@ def main():
 
         division = st.session_state.get("division")
 
-        if role == "System Handler":
+        district = st.session_state.get("district")
+
+        if role == "District Admin":
+
+            admin_dashboard(district=district)
+
+        elif role == "System Handler":
 
             system_handler_dashboard()
 
@@ -130,6 +141,27 @@ def main():
             organization_dashboard(
                 "Municipality",
                 division
+            )
+
+        elif role == "District Police":
+
+            organization_dashboard(
+                "District Police",
+                district=district
+            )
+
+        elif role == "District Fire Service":
+
+            organization_dashboard(
+                "District Fire Service",
+                district=district
+            )
+
+        elif role == "District Municipality":
+
+            organization_dashboard(
+                "District Municipality",
+                district=district
             )
 
     # --------------------------------------------------------

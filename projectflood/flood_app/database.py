@@ -9,6 +9,7 @@ from flood_app.geography import (
     DISTRICT_COORDINATES,
     DISTRICT_NAMES,
     DIVISION_AREAS,
+    slugify_name,
 )
 
 
@@ -16,51 +17,6 @@ def get_connection():
     return sqlite3.connect(
         DB_NAME,
         check_same_thread=False
-    )
-
-
-# Retired account tier (kept only so old databases get cleaned up).
-RETIRED_DISTRICT_ROLES = (
-    "District Admin", "District Police",
-    "District Fire Service", "District Municipality"
-)
-
-
-def _retire_district_tier(cursor):
-    """Removes the retired District Admin / district organization
-    accounts and every mailbox / alert-read row that belonged to
-    them from an older database. Division and System Handler
-    accounts, sensors, readings and the audit log are untouched.
-    Does nothing (one cheap query) once they are gone."""
-
-    marks = ", ".join("?" for _ in RETIRED_DISTRICT_ROLES)
-
-    exists = cursor.execute(
-        f"SELECT 1 FROM users WHERE role IN ({marks}) LIMIT 1",
-        RETIRED_DISTRICT_ROLES
-    ).fetchone()
-
-    if not exists:
-        return
-
-    for role in RETIRED_DISTRICT_ROLES:
-
-        pattern = f"% {role}"
-
-        cursor.execute(
-            "DELETE FROM emergency_alert_reads WHERE recipient_key LIKE ?",
-            (pattern,)
-        )
-
-        cursor.execute(
-            "DELETE FROM email_log "
-            "WHERE owner_role LIKE ? OR sender_role LIKE ?",
-            (pattern, pattern)
-        )
-
-    cursor.execute(
-        f"DELETE FROM users WHERE role IN ({marks})",
-        RETIRED_DISTRICT_ROLES
     )
 
 
@@ -737,12 +693,61 @@ def init_database():
             )
 
     # --------------------------------------------------------
-    # The account hierarchy is: System Handler -> Division Admins ->
-    # division Police / Fire Service / Hospital / Municipality.
-    # (An earlier version also had a District Admin tier and
-    # district-level organization accounts; those are retired and
-    # removed by _retire_district_tier() below.)
+    # DISTRICT ADMINS
     # --------------------------------------------------------
+    # A separate, parallel admin tier: Administrator-equivalent
+    # capabilities scoped to one district (see DISTRICT_NAMES /
+    # DISTRICT_AREAS above). Uses the `district` column, kept
+    # entirely separate from `division`/`area` (which remain
+    # NULL here) so a District Admin can never be mistaken for a
+    # Division Admin or vice versa by any code that checks those
+    # columns.
+    # --------------------------------------------------------
+
+    for district_name in DISTRICT_NAMES:
+
+        district_slug = slugify_name(district_name)
+
+        default_users.append(
+            (
+                f"admin_{district_slug}",
+                f"{district_slug}district123",
+                "District Admin",
+                None,
+                None,
+                district_name
+            )
+        )
+
+        # ----------------------------------------------------
+        # DISTRICT POLICE / FIRE SERVICE / MUNICIPALITY
+        # ----------------------------------------------------
+        # Every district gets its own Police, Fire Service and
+        # Municipality account too (District Admin already
+        # existed above) — role strings are prefixed
+        # "District " so they can never be confused with a
+        # division-specific org account (e.g. "Dhaka Police"
+        # vs. "District Police" for Dhaka District), even
+        # though both may share the same district/division
+        # name.
+        # ----------------------------------------------------
+
+        for org_role, org_slug in (
+            ("District Police", "police"),
+            ("District Fire Service", "fire"),
+            ("District Municipality", "municipality")
+        ):
+
+            default_users.append(
+                (
+                    f"{district_slug}_district_{org_slug}",
+                    f"{district_slug}district{org_slug}123",
+                    org_role,
+                    None,
+                    None,
+                    district_name
+                )
+            )
 
     # Only accounts that don't exist yet are hashed. init_database()
     # runs on every Streamlit rerun, and PBKDF2 is deliberately slow,
@@ -794,8 +799,6 @@ def init_database():
 
         except sqlite3.IntegrityError:
             pass
-
-    _retire_district_tier(cursor)
 
     # --------------------------------------------------------
     # DEFAULT SENSOR LOCATIONS

@@ -212,12 +212,20 @@ def get_division_for_location(location):
 
 
 # ============================================================
-# DISTRICTS (monitored locations)
+# DISTRICT ADMIN HIERARCHY
 # ============================================================
-# DISTRICT_NAMES is every one of the 64 real districts (zilas):
-# the finest granularity this app monitors (each is a sensor
-# location). There are no district-level ACCOUNTS - the account
-# hierarchy stops at the 8 divisions.
+# A separate, parallel admin tier to Division Admin — a District
+# Admin (and District Police/Fire Service/Municipality) gets the
+# same dashboard capabilities as their division-level
+# counterpart, but scoped to exactly ONE real district instead
+# of that district's whole division.
+#
+# DISTRICT_NAMES is now every one of the 64 real districts (zilas)
+# — one set of District Admin/Police/Fire Service/Municipality
+# accounts per district, 256 accounts total. DISTRICT_AREAS is
+# an identity mapping (a district's only "area" is itself) since
+# districts are already the finest granularity this app
+# monitors — there's no further sub-district breakdown.
 # ============================================================
 
 DISTRICT_NAMES = [
@@ -225,6 +233,44 @@ DISTRICT_NAMES = [
     for division_districts in DIVISION_AREAS.values()
     for district in division_districts
 ]
+
+
+DISTRICT_AREAS = {
+    district_name: [district_name]
+    for district_name in DISTRICT_NAMES
+}
+
+
+def get_district_areas(district):
+    """Every area a District Admin for this district may work
+    with — always just [district] itself, since districts are
+    this app's finest monitoring granularity. Returns [] for an
+    unrecognized district — callers must treat that as "no areas
+    available", never as "unrestricted"."""
+
+    return DISTRICT_AREAS.get(district, [])
+
+
+def get_districts_for_location(location):
+    """
+    Every district (there can be more than one in principle,
+    though with the real 64-district model there's normally
+    exactly one) whose area list contains this location.
+    Case/whitespace-insensitive. Used by the automatic emergency
+    alert system so a District Admin is notified when their own
+    district crosses the alert threshold.
+    """
+
+    if not location:
+        return []
+
+    normalized = str(location).strip().lower()
+
+    return [
+        district
+        for district, areas in DISTRICT_AREAS.items()
+        if normalized in {a.strip().lower() for a in areas}
+    ]
 
 
 def slugify_name(name):

@@ -14,7 +14,7 @@ DB_NAME = "flood_monitoring.db"
 # ============================================================
 # Everything in this section is ADDITIVE and only ever runs for
 # the "System Handler" role (the top-level account). Every other
-# role - Division Admin, Police, Fire Service,
+# role - Division / District Admin, Police, Fire Service,
 # Hospital, Municipality - never touches any of this and goes
 # through authenticate_user() with no extra steps.
 #
@@ -346,8 +346,9 @@ AUTO_ALERT_COOLDOWN_MINUTES = 5
 # ONE gauge implementation, reused identically by every
 # dashboard that shows a single location's prediction
 # (organization_dashboard — Police/Fire Service/Hospital/
-# Municipality — plus division_admin_dashboard and the public
-# dashboard) so the
+# Municipality/District Police/District Fire Service/District
+# Municipality — plus admin_dashboard i.e. District Admin,
+# division_admin_dashboard, and the public dashboard) so the
 # same reading always looks the same everywhere. Risk-zone
 # colors and the threshold line match classify_risk() EXACTLY
 # (Low < 50, Moderate 50-69.99, High 70-89.99, Severe >= 90),
@@ -369,6 +370,11 @@ RISK_ZONE_COLOR = {
 
 DIVISION_ORG_ROLES = (
     "Police", "Fire Service", "Hospital", "Municipality"
+)
+
+DISTRICT_ORG_ROLES = (
+    "District Police", "District Fire Service",
+    "District Municipality"
 )
 
 

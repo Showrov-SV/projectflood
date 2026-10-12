@@ -76,6 +76,13 @@ def sidebar():
                 f"({st.session_state.division})"
             )
 
+        elif st.session_state.get("district"):
+
+            st.sidebar.write(
+                f"Role: **{st.session_state.role}** "
+                f"({st.session_state.district} District)"
+            )
+
         else:
 
             st.sidebar.write(
@@ -85,23 +92,40 @@ def sidebar():
         # --------------------------------------------------
         # 🚨 Emergency Alerts indicator (new blink/sound
         # system). Shown for every role that can receive an
-        # emergency alert — every division organization role plus
-        # Division Admin. Uses the exact same mailbox_key() as
+        # emergency alert — every organization role, legacy
+        # or division-specific, plus Division Admin and
+        # District Admin. Uses the exact same mailbox_key() as
         # the dashboards themselves, so the count here always
         # matches what that dashboard's banner is showing.
         # --------------------------------------------------
 
         alert_recipient_roles = (
             "Police", "Fire Service", "Hospital",
-            "Municipality", "Division Admin"
+            "Municipality", "Division Admin", "District Admin",
+            "District Police", "District Fire Service",
+            "District Municipality"
+        )
+
+        district_tier_roles = (
+            "District Admin", "District Police",
+            "District Fire Service", "District Municipality"
         )
 
         if st.session_state.role in alert_recipient_roles:
 
-            sidebar_mailbox = mailbox_key(
-                st.session_state.role,
-                st.session_state.get("division")
-            )
+            if st.session_state.role in district_tier_roles:
+
+                sidebar_mailbox = mailbox_key(
+                    st.session_state.role,
+                    st.session_state.get("district")
+                )
+
+            else:
+
+                sidebar_mailbox = mailbox_key(
+                    st.session_state.role,
+                    st.session_state.get("division")
+                )
 
             unread_alert_count = (
                 get_unread_emergency_alert_count(

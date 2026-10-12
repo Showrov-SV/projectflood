@@ -1,10 +1,10 @@
 """Organization portals: Police, Fire Service, Hospital, Municipality
-(division level)."""
+(division and district level)."""
 
 import streamlit as st
 
 from flood_app.alert_ui import render_emergency_alert_banner
-from flood_app.geography import DIVISION_AREAS
+from flood_app.geography import DIVISION_AREAS, get_district_areas
 from flood_app.history_ui import render_history_panel
 from flood_app.mail_roles import (
     EMERGENCY_DOMAINS,
@@ -24,7 +24,8 @@ from flood_app.sensors import generate_all_sensor_data
 
 def organization_dashboard(
     role,
-    division=None
+    division=None,
+    district=None
 ):
     """
     division is None for the 5 original global accounts (Police,
@@ -38,17 +39,27 @@ def organization_dashboard(
     "Dhaka Police") — used for its own Inbox/Sent/Bin, its own
     emergency-alert read state, and to scope monitoring data to
     just that division's areas.
+
+    district is set instead for a district-tier organization
+    account (District Police, District Fire Service, District
+    Municipality — role itself is already prefixed "District ",
+    e.g. role="District Police"). It mirrors the division branch
+    exactly, but scopes to DISTRICT_AREAS/get_district_areas()
+    instead of DIVISION_AREAS, and messages that district's own
+    District Admin instead of a Division Admin. division and
+    district are never both set for the same account.
     """
 
-    mailbox = mailbox_key(role, division)
+    mailbox = mailbox_key(role, division or district)
 
     # --------------------------------------------------------
     # Generate latest sensor data
     # --------------------------------------------------------
     # For a hierarchical account, scope every table/map/metric
-    # below to ONLY this division's areas — this
-    # is what makes e.g. Dhaka Police see Dhaka data only.
-    # Legacy accounts (division=None) keep seeing
+    # below to ONLY this division's (or district's) areas — this
+    # is what makes e.g. Dhaka Police see Dhaka data only, and
+    # Dhaka District Police see Dhaka District's areas only.
+    # Legacy accounts (division=None, district=None) keep seeing
     # every location exactly as before.
     # --------------------------------------------------------
 
@@ -57,7 +68,7 @@ def organization_dashboard(
     )
 
     # None for a legacy nationwide account (no scope
-    # restriction); set below to this division's
+    # restriction); set below to this division's or district's
     # own areas for a hierarchical account. Reused further down
     # to scope sensor registration / dataset upload the same way.
     scoped_area_list = None
@@ -70,9 +81,20 @@ def organization_dashboard(
             readings["location"].isin(scoped_area_list)
         ]
 
+    elif district:
+
+        scoped_area_list = get_district_areas(district)
+
+        readings = readings[
+            readings["location"].isin(scoped_area_list)
+        ]
+
     # --------------------------------------------------------
     # Title
     # --------------------------------------------------------
+    # Substring checks (not ==) so this also matches the
+    # district-tier role strings ("District Fire Service",
+    # "District Municipality") without duplicating this block.
     # --------------------------------------------------------
 
     if "Hospital" in role:
@@ -101,6 +123,12 @@ def organization_dashboard(
             f"{icon} {division} {role} Portal"
         )
 
+    elif district:
+
+        st.title(
+            f"{icon} {district} {role} Portal"
+        )
+
     else:
 
         st.title(
@@ -114,6 +142,13 @@ def organization_dashboard(
         st.caption(
             f"👤 Role: {role}  |  Division: {division}"
             + (f"  |  Area: {_area}" if _area else "")
+        )
+
+    elif district:
+
+        st.caption(
+            f"👤 Role: {role}  |  District: {district}  |  "
+            f"Area: {st.session_state.get('area') or '—'}"
         )
 
     else:
@@ -165,6 +200,12 @@ def organization_dashboard(
     if division:
 
         email_recipients = [f"{division} Division Admin"]
+
+    elif district:
+
+        email_recipients = [
+            mailbox_key("District Admin", district)
+        ]
 
     else:
 
@@ -457,7 +498,8 @@ def organization_dashboard(
     st.divider()
 
     # ========================================================
-    # HISTORICAL DATA (scoped to this account's own areas)
+    # HISTORICAL DATA (scoped to this account's own areas: its
+    # division's, or just its one district for a district account)
     # ========================================================
 
     st.subheader("📜 Historical Data")
