@@ -5,6 +5,13 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
+from flood_app.activity_log import (
+    ACTION_LOGIN,
+    ACTION_LOGIN_BLOCKED,
+    ACTION_LOGIN_FAILED,
+    count_activity,
+    get_activity_log,
+)
 from flood_app.alerts import (
     create_emergency_alert,
     get_total_unread_emergency_alert_count,
@@ -12,12 +19,13 @@ from flood_app.alerts import (
     mark_all_emergency_alerts_read_nationwide,
 )
 from flood_app.config import (
-    DISTRICT_ORG_ROLES,
     DIVISION_ORG_ROLES,
     NO_DATA_CIRCLE,
     RISK_CIRCLE,
 )
-from flood_app.data_ui import sensor_and_dataset_management_section
+from flood_app.data_ui import (
+    sensor_and_dataset_management_section,
+)
 from flood_app.database import get_connection
 from flood_app.geography import (
     BD_DIVISIONS,
@@ -25,6 +33,7 @@ from flood_app.geography import (
     DIVISION_AREAS,
     get_division_for_location,
 )
+from flood_app.history_ui import render_history_panel
 from flood_app.mail_roles import mailbox_key
 from flood_app.mail_ui import email_center
 from flood_app.maps import create_flood_map, worst_risk_circle
@@ -139,7 +148,7 @@ def count_alert_events_since(hours=24):
 
 def unread_alert_copies_by_division(unread_by_mailbox):
     """Unread alert copies per division, counting the division's
-    own accounts AND every district account inside it."""
+    own Division Admin and organization accounts."""
 
     totals = {}
 
@@ -154,23 +163,12 @@ def unread_alert_copies_by_division(unread_by_mailbox):
                 mailbox_key(org_role, division), 0
             )
 
-        for district_name in DIVISION_AREAS.get(division, []):
-
-            total += unread_by_mailbox.get(
-                mailbox_key("District Admin", district_name), 0
-            )
-
-            for org_role in DISTRICT_ORG_ROLES:
-                total += unread_by_mailbox.get(
-                    mailbox_key(org_role, district_name), 0
-                )
-
         totals[division] = total
 
     return totals
 
 
-def broadcast_recipient_keys(divisions, include_districts):
+def broadcast_recipient_keys(divisions):
     """Mailbox keys that should receive a manual System Handler
     alert for the given divisions."""
 
@@ -185,25 +183,108 @@ def broadcast_recipient_keys(divisions, include_districts):
             for org_role in DIVISION_ORG_ROLES
         ]
 
-        if include_districts:
-
-            for district_name in DIVISION_AREAS.get(division, []):
-
-                keys.append(
-                    mailbox_key("District Admin", district_name)
-                )
-
-                keys += [
-                    mailbox_key(org_role, district_name)
-                    for org_role in DISTRICT_ORG_ROLES
-                ]
-
     return keys
 
 
 # ============================================================
 # SYSTEM HANDLER DASHBOARD
 # ============================================================
+
+def activity_log_panel():
+    """Login history and activity audit trail for every account —
+    the System Handler's view of who did what, and when."""
+
+    st.subheader("🧾 Login history & activity log")
+
+    st.caption(
+        "Every login attempt (success, failure, lockout, OTP "
+        "outcome), logout, alert/siren, message, sensor "
+        "registration and dataset load is recorded here. "
+        "Passwords and OTP codes are never stored."
+    )
+
+    m1, m2, m3 = st.columns(3)
+
+    m1.metric(
+        "Successful logins (24h)",
+        count_activity(ACTION_LOGIN, "success", 24)
+    )
+
+    m2.metric(
+        "Failed logins (24h)",
+        count_activity(ACTION_LOGIN_FAILED, None, 24)
+    )
+
+    m3.metric(
+        "Blocked / locked (24h)",
+        count_activity(None, "blocked", 24)
+    )
+
+    f1, f2, f3, f4 = st.columns(4)
+
+    user_filter = f1.text_input(
+        "Username contains",
+        key="activity_filter_user"
+    )
+
+    action_filter = f2.selectbox(
+        "Action",
+        [
+            "All", "LOGIN", "LOGIN_FAILED", "LOGIN_BLOCKED",
+            "OTP_SENT", "OTP_VERIFY", "LOGOUT", "ALERT_SENT",
+            "MESSAGE_SENT", "SENSOR_ADDED", "DATASET_LOADED",
+            "PASSWORD_HASH_UPGRADED"
+        ],
+        key="activity_filter_action"
+    )
+
+    status_filter = f3.selectbox(
+        "Status",
+        ["All", "success", "failed", "blocked"],
+        key="activity_filter_status"
+    )
+
+    window_label = f4.selectbox(
+        "Period",
+        ["Last 24 hours", "Last 7 days", "Last 30 days", "All time"],
+        key="activity_filter_window"
+    )
+
+    since_hours = {
+        "Last 24 hours": 24,
+        "Last 7 days": 24 * 7,
+        "Last 30 days": 24 * 30,
+        "All time": None
+    }[window_label]
+
+    log_df = get_activity_log(
+        limit=1000,
+        username=user_filter.strip() or None,
+        action=None if action_filter == "All" else action_filter,
+        status=None if status_filter == "All" else status_filter,
+        since_hours=since_hours
+    )
+
+    if log_df.empty:
+
+        st.info("No activity matches these filters.")
+
+    else:
+
+        st.dataframe(
+            log_df.drop(columns=["id"]),
+            width="stretch",
+            hide_index=True
+        )
+
+        st.download_button(
+            "⬇️ Download as CSV",
+            log_df.drop(columns=["id"]).to_csv(index=False),
+            file_name="activity_log.csv",
+            mime="text/csv",
+            key="activity_log_download"
+        )
+
 
 def system_handler_dashboard():
     """
@@ -265,15 +346,17 @@ def system_handler_dashboard():
         st.warning("No sensor readings are currently available.")
 
     (
-        tab_overview, tab_map, tab_districts,
-        tab_alerts, tab_messages, tab_data
+        tab_overview, tab_map, tab_districts, tab_history,
+        tab_alerts, tab_messages, tab_data, tab_activity
     ) = st.tabs([
         "📊 Overview",
         "🗺️ Live Map",
         "🔍 Districts",
+        "📜 History",
         "🚨 Alerts",
         "📨 Messages",
-        "⚙️ Sensors & Data"
+        "⚙️ Sensors & Data",
+        "🧾 Activity Log"
     ])
 
     # --------------------------------------------------------
@@ -399,13 +482,24 @@ def system_handler_dashboard():
 
     with tab_map:
 
-        map_division = st.selectbox(
-            "Show",
-            ["All divisions"] + BD_DIVISIONS,
-            key="sh_map_division"
-        )
+        pick_division, pick_location = st.columns(2)
+
+        with pick_division:
+
+            map_division = st.selectbox(
+                "Division",
+                ["All divisions"] + BD_DIVISIONS,
+                key="sh_map_division"
+            )
 
         if not has_data:
+
+            with pick_location:
+                st.selectbox(
+                    "Location",
+                    ["All locations"],
+                    key="sh_map_location_empty"
+                )
 
             st.warning("No sensor readings are currently available.")
 
@@ -421,10 +515,50 @@ def system_handler_dashboard():
                 ]
             )
 
+            location_names = sorted(
+                map_readings["location"].astype(str).str.strip().unique()
+            )
+
+            with pick_location:
+
+                # One widget key per division, so changing the
+                # division never leaves a stale location selected.
+                map_location = st.selectbox(
+                    "Location",
+                    ["All locations"] + location_names,
+                    key=f"sh_map_location_{map_division}"
+                )
+
+            focus = (
+                None if map_location == "All locations"
+                else map_location
+            )
+
             st.plotly_chart(
-                create_flood_map(map_readings),
+                create_flood_map(
+                    map_readings,
+                    focus_location=focus,
+                    auto_fit=True
+                ),
                 width="stretch"
             )
+
+            if focus:
+
+                chosen = locations[locations["location"] == focus]
+
+                if not chosen.empty:
+
+                    row = chosen.iloc[0]
+
+                    st.markdown(
+                        f"**{risk_label(row['risk_level'])} — {focus}**  "
+                        f"· Flood probability "
+                        f"**{row['flood_probability']:.1f}%**  "
+                        f"· Water level **{row['water_level']:.2f} m**  "
+                        f"· Rainfall **{row['rainfall']:.0f} mm**  "
+                        f"· Sensors **{int(row['sensors'])}**"
+                    )
 
             st.caption(
                 "🟢 Low   🟡 Moderate   🟠 High   🔴 Severe — "
@@ -504,15 +638,6 @@ def system_handler_dashboard():
             if level not in risk_filter:
                 continue
 
-            unread = unread_by_mailbox.get(
-                mailbox_key("District Admin", district_name), 0
-            ) + sum(
-                unread_by_mailbox.get(
-                    mailbox_key(org_role, district_name), 0
-                )
-                for org_role in DISTRICT_ORG_ROLES
-            )
-
             district_rows.append({
                 "Risk level": level,
                 "District": district_name,
@@ -528,7 +653,6 @@ def system_handler_dashboard():
                     if row is not None else None,
                 "Sensors":
                     int(row["sensors"]) if row is not None else 0,
-                "Unread alerts": int(unread),
             })
 
         if district_rows:
@@ -546,7 +670,7 @@ def system_handler_dashboard():
             })[[
                 "Risk", "District", "Division",
                 "Flood probability (%)", "Water level (m)",
-                "Rainfall (mm)", "Sensors", "Unread alerts"
+                "Rainfall (mm)", "Sensors"
             ]]
 
             st.dataframe(
@@ -590,6 +714,16 @@ def system_handler_dashboard():
         else:
 
             st.info("No districts match that search/filter.")
+
+    # --------------------------------------------------------
+    # HISTORY
+    # --------------------------------------------------------
+
+    with tab_history:
+
+        st.subheader("📜 Historical flood data")
+
+        render_history_panel(None, key_prefix="sh_history")
 
     # --------------------------------------------------------
     # ALERTS
@@ -690,12 +824,6 @@ def system_handler_dashboard():
                 key="sh_bc_level"
             )
 
-            bc_districts = st.checkbox(
-                "Also alert district-level accounts",
-                value=True,
-                key="sh_bc_districts"
-            )
-
             bc_title = st.text_input(
                 "Alert title",
                 key="sh_bc_title"
@@ -738,7 +866,7 @@ def system_handler_dashboard():
                     )
 
                     recipient_keys = broadcast_recipient_keys(
-                        target_divisions, bc_districts
+                        target_divisions
                     )
 
                     create_emergency_alert(
@@ -878,3 +1006,11 @@ def system_handler_dashboard():
             scope_label="the nation",
             key_prefix="sh"
         )
+
+    # --------------------------------------------------------
+    # ACTIVITY LOG (login history + audit trail, all users)
+    # --------------------------------------------------------
+
+    with tab_activity:
+
+        activity_log_panel()

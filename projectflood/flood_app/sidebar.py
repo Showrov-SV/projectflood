@@ -2,6 +2,14 @@
 
 import streamlit as st
 
+from flood_app.activity_log import (
+    ACTION_LOGIN,
+    ACTION_LOGIN_BLOCKED,
+    ACTION_LOGIN_FAILED,
+    ACTION_LOGOUT,
+    ACTION_OTP_VERIFY,
+    log_activity,
+)
 from flood_app.alerts import get_unread_emergency_alert_count
 from flood_app.auth import (
     add_trusted_device,
@@ -68,13 +76,6 @@ def sidebar():
                 f"({st.session_state.division})"
             )
 
-        elif st.session_state.get("district"):
-
-            st.sidebar.write(
-                f"Role: **{st.session_state.role}** "
-                f"({st.session_state.district} District)"
-            )
-
         else:
 
             st.sidebar.write(
@@ -84,40 +85,23 @@ def sidebar():
         # --------------------------------------------------
         # 🚨 Emergency Alerts indicator (new blink/sound
         # system). Shown for every role that can receive an
-        # emergency alert — every organization role, legacy
-        # or division-specific, plus Division Admin and
-        # District Admin. Uses the exact same mailbox_key() as
+        # emergency alert — every division organization role plus
+        # Division Admin. Uses the exact same mailbox_key() as
         # the dashboards themselves, so the count here always
         # matches what that dashboard's banner is showing.
         # --------------------------------------------------
 
         alert_recipient_roles = (
             "Police", "Fire Service", "Hospital",
-            "Municipality", "Division Admin", "District Admin",
-            "District Police", "District Fire Service",
-            "District Municipality"
-        )
-
-        district_tier_roles = (
-            "District Admin", "District Police",
-            "District Fire Service", "District Municipality"
+            "Municipality", "Division Admin"
         )
 
         if st.session_state.role in alert_recipient_roles:
 
-            if st.session_state.role in district_tier_roles:
-
-                sidebar_mailbox = mailbox_key(
-                    st.session_state.role,
-                    st.session_state.get("district")
-                )
-
-            else:
-
-                sidebar_mailbox = mailbox_key(
-                    st.session_state.role,
-                    st.session_state.get("division")
-                )
+            sidebar_mailbox = mailbox_key(
+                st.session_state.role,
+                st.session_state.get("division")
+            )
 
             unread_alert_count = (
                 get_unread_emergency_alert_count(
@@ -143,6 +127,8 @@ def sidebar():
             "🚪 Logout",
             width="stretch"
         ):
+
+            log_activity(ACTION_LOGOUT)
 
             st.session_state.logged_in = False
 
@@ -197,9 +183,9 @@ def sidebar():
     else:
 
         # ----------------------------------------------------
-        # STEP 2 OF ADMIN LOGIN: waiting for the OTP that was
-        # emailed after a correct Administrator password.
-        # Only ever entered for Administrator accounts — every
+        # STEP 2 OF SYSTEM HANDLER LOGIN: waiting for the OTP that
+        # was emailed after a correct System Handler password.
+        # Only ever entered for the System Handler account — every
         # other role never sets admin_2fa_pending and always
         # falls through to the ordinary password form below,
         # completely unchanged.
@@ -295,6 +281,19 @@ def sidebar():
 
                     if verdict == "ok":
 
+                        log_activity(
+                            ACTION_LOGIN,
+                            username=otp_username,
+                            role="System Handler",
+                            details=(
+                                "Password + email OTP verified"
+                                + (
+                                    "; device remembered"
+                                    if remember_device else ""
+                                )
+                            )
+                        )
+
                         if remember_device:
 
                             new_token = add_trusted_device(
@@ -335,6 +334,14 @@ def sidebar():
 
                     elif verdict == "expired":
 
+                        log_activity(
+                            ACTION_OTP_VERIFY,
+                            username=otp_username,
+                            role="System Handler",
+                            status="failed",
+                            details="OTP expired"
+                        )
+
                         st.sidebar.error(
                             "This code has expired. Use "
                             "Resend OTP to get a new one."
@@ -342,12 +349,28 @@ def sidebar():
 
                     elif verdict == "no_otp":
 
+                        log_activity(
+                            ACTION_OTP_VERIFY,
+                            username=otp_username,
+                            role="System Handler",
+                            status="failed",
+                            details="No active OTP"
+                        )
+
                         st.sidebar.error(
                             "No active code for this session. "
                             "Use Resend OTP to get a new one."
                         )
 
                     elif verdict == "locked_out":
+
+                        log_activity(
+                            ACTION_OTP_VERIFY,
+                            username=otp_username,
+                            role="System Handler",
+                            status="blocked",
+                            details="Too many incorrect OTP attempts"
+                        )
 
                         st.sidebar.error(
                             "Too many incorrect codes. Please "
@@ -360,6 +383,14 @@ def sidebar():
                         st.session_state.admin_2fa_username = None
 
                     else:
+
+                        log_activity(
+                            ACTION_OTP_VERIFY,
+                            username=otp_username,
+                            role="System Handler",
+                            status="failed",
+                            details="Incorrect OTP"
+                        )
 
                         st.sidebar.error(
                             "Incorrect code. Please try again."
@@ -438,7 +469,7 @@ def sidebar():
 
                 # Look up the account's role first, WITHOUT
                 # checking the password yet — purely to decide
-                # whether this attempt needs the Administrator
+                # whether this attempt needs the System Handler
                 # lockout / 2FA path. This never reveals
                 # whether the password itself is correct.
 
@@ -474,6 +505,14 @@ def sidebar():
                     )
 
                     if locked:
+
+                        log_activity(
+                            ACTION_LOGIN_BLOCKED,
+                            username=username,
+                            role="System Handler",
+                            status="blocked",
+                            details="Login attempt while account locked"
+                        )
 
                         minutes_remaining = max(
                             1, seconds_remaining // 60
@@ -514,6 +553,16 @@ def sidebar():
                                 username,
                                 device_cookie_value
                             ):
+
+                                log_activity(
+                                    ACTION_LOGIN,
+                                    username=username,
+                                    role="System Handler",
+                                    details=(
+                                        "Password verified; trusted "
+                                        "device (OTP skipped)"
+                                    )
+                                )
 
                                 st.session_state.logged_in = (
                                     True
@@ -571,6 +620,23 @@ def sidebar():
                                 )
                             )
 
+                            log_activity(
+                                ACTION_LOGIN_FAILED,
+                                username=username,
+                                role="System Handler",
+                                status=(
+                                    "failed"
+                                    if remaining_attempts > 0
+                                    else "blocked"
+                                ),
+                                details=(
+                                    "Wrong password"
+                                    if remaining_attempts > 0
+                                    else "Wrong password; account "
+                                         "now locked"
+                                )
+                            )
+
                             if remaining_attempts > 0:
 
                                 st.sidebar.error(
@@ -604,6 +670,15 @@ def sidebar():
 
                     if result:
 
+                        log_activity(
+                            ACTION_LOGIN,
+                            username=result[0],
+                            role=result[1],
+                            division=result[2],
+                            district=result[4],
+                            details="Password verified"
+                        )
+
                         st.session_state.logged_in = True
 
                         st.session_state.username = result[0]
@@ -623,6 +698,14 @@ def sidebar():
                         st.rerun()
 
                     else:
+
+                        log_activity(
+                            ACTION_LOGIN_FAILED,
+                            username=username or "(blank)",
+                            role=attempted_role or "(unknown account)",
+                            status="failed",
+                            details="Invalid username or password"
+                        )
 
                         st.sidebar.error(
                             "Invalid username or password."

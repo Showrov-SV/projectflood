@@ -13,7 +13,14 @@ from flood_app.config import (
     DATASET_VALUE_LIMITS,
     REQUIRED_DATASET_COLUMNS,
 )
+from flood_app.data_mode import (
+    dataset_signature,
+    delete_dataset,
+    load_datasets,
+    save_dataset,
+)
 from flood_app.prediction import hybrid_flood_prediction_batch
+from flood_app.retraining import request_retrain
 
 
 def normalize_dataset_columns(df):
@@ -79,6 +86,54 @@ def normalize_dataset_columns(df):
     )
 
     return df
+
+
+# Columns that may carry the REAL outcome of each row (used as a
+# training label). Checked in this order.
+LABEL_COLUMN_CANDIDATES = (
+    "flood_probability",
+    "flood_label",
+    "flood_occurred",
+    "flood",
+)
+
+# A file exported from THIS app contains the model's own predictions
+# (including a flood_probability column). Those must never be used as
+# labels - the model would learn from itself.
+_APP_EXPORT_MARKER_COLUMNS = (
+    "ml_probability",
+    "physics_probability",
+    "model_name",
+    "predicted_water_level",
+)
+
+
+def _extract_training_labels(df):
+    """Returns (label_column_name or None, Series of labels 0-99.9 with
+    NaN where missing) for the normalised DataFrame `df`.
+    0/1 columns become 0 / 99.9; 0-1 fractions become percent."""
+
+    if any(column in df.columns for column in _APP_EXPORT_MARKER_COLUMNS):
+        return None, None
+
+    for column in LABEL_COLUMN_CANDIDATES:
+
+        if column not in df.columns:
+            continue
+
+        values = pd.to_numeric(df[column], errors="coerce").replace(
+            [np.inf, -np.inf], np.nan
+        )
+
+        if values.notna().sum() == 0:
+            continue
+
+        if values.dropna().between(0, 1).all():
+            values = values * 100.0
+
+        return column, values.clip(0, 99.9)
+
+    return None, None
 
 
 def _read_csv_tolerant(uploaded_file):
@@ -279,6 +334,8 @@ def process_uploaded_dataframe(
 
         return None
 
+    label_column, label_values = _extract_training_labels(df)
+
     numeric_columns = [
 
         "water_level",
@@ -362,6 +419,16 @@ def process_uploaded_dataframe(
         )
     )
 
+    if label_values is not None:
+
+        label_values = label_values.loc[df.index].reset_index(drop=True)
+
+        st.info(
+            f"Real outcome labels found in column '{label_column}' "
+            f"({int(label_values.notna().sum())} row(s)). They will "
+            f"be used when the models retrain."
+        )
+
     df = df.reset_index(drop=True)
 
     # One vectorised prediction for the whole file (instead of
@@ -406,6 +473,11 @@ def process_uploaded_dataframe(
         axis=1
     )
 
+    results["training_label"] = (
+        label_values.to_numpy() if label_values is not None
+        else np.nan
+    )
+
     results["data_source"] = "External Dataset"
 
     return results
@@ -427,6 +499,28 @@ def ensure_dataset_state():
     if "uploaded_datasets_meta" not in st.session_state:
 
         st.session_state.uploaded_datasets_meta = {}
+
+    # Uploaded datasets are now stored in the database (live_readings),
+    # so they survive a refresh / restart and are shared by every
+    # session. Re-read them whenever the stored set changed (this
+    # session or another one loaded / removed a dataset).
+    try:
+
+        signature = dataset_signature()
+
+        if st.session_state.get("_dataset_signature") != signature:
+
+            datasets, metas = load_datasets()
+
+            st.session_state.uploaded_datasets = datasets
+
+            st.session_state.uploaded_datasets_meta = metas
+
+            st.session_state["_dataset_signature"] = signature
+
+    except Exception:
+
+        pass  # keep whatever the session already holds
 
 
 def pick_latest_record(df):
@@ -527,11 +621,44 @@ def get_dataset_readings():
     )
 
 
+def commit_dataset(location, processed, meta):
+
+    """
+    Stores a processed dataset for a location: in the session, and
+    permanently in the database. The first real data connected also
+    switches the whole system from simulation to LIVE mode (see
+    data_mode.py). Returns True if this call switched to live mode.
+    """
+
+    ensure_dataset_state()
+
+    switched = save_dataset(location, processed, meta)
+
+    st.session_state.uploaded_datasets[location] = processed
+
+    st.session_state.uploaded_datasets_meta[location] = meta
+
+    st.session_state["_dataset_signature"] = dataset_signature()
+
+    # New real data: let the models learn from it (background thread;
+    # does nothing in simulation mode).
+    try:
+        request_retrain(force=True)
+    except Exception:
+        pass
+
+    return switched
+
+
 def remove_dataset_location(location):
 
     """Removes the uploaded dataset for one location only."""
 
     ensure_dataset_state()
+
+    delete_dataset(location)
+
+    st.session_state["_dataset_signature"] = dataset_signature()
 
     st.session_state.uploaded_datasets.pop(
         location,

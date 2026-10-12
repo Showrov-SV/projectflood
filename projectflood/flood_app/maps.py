@@ -1,5 +1,6 @@
 """Risk colours/badges and the Plotly flood map."""
 
+import math
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -90,9 +91,57 @@ def location_badge_row(readings, location_list):
     return "  •  ".join(badges)
 
 
+def _fit_view(latitudes, longitudes, width_px=900, height_px=600):
+    """
+    Returns ({"lat":..,"lon":..}, zoom) so that a map of roughly
+    width_px x height_px shows every given point with ~30 %
+    padding. A single point (or points on top of each other)
+    gets a close-up zoom.
+    """
+
+    lat_min, lat_max = min(latitudes), max(latitudes)
+    lon_min, lon_max = min(longitudes), max(longitudes)
+
+    center = {
+        "lat": (lat_min + lat_max) / 2,
+        "lon": (lon_min + lon_max) / 2
+    }
+
+    lon_span = lon_max - lon_min
+
+    def mercator_y(latitude):
+        return math.log(
+            math.tan(math.pi / 4 + math.radians(latitude) / 2)
+        )
+
+    lat_fraction = (
+        mercator_y(lat_max) - mercator_y(lat_min)
+    ) / (2 * math.pi)
+
+    if lon_span < 1e-4 and lat_fraction < 1e-6:
+        return center, 11
+
+    padding = 1.3
+
+    zoom_candidates = []
+
+    if lon_span > 1e-4:
+        zoom_candidates.append(
+            math.log2(360 * width_px / (256 * lon_span * padding))
+        )
+
+    if lat_fraction > 1e-6:
+        zoom_candidates.append(
+            math.log2(height_px / (256 * lat_fraction * padding))
+        )
+
+    return center, max(3, min(11, min(zoom_candidates)))
+
+
 def create_flood_map(
     readings,
-    focus_location=None
+    focus_location=None,
+    auto_fit=False
 ):
 
     """
@@ -108,7 +157,11 @@ def create_flood_map(
     coordinates), the map centers on and zooms into that one
     location instead of auto-fitting every plotted location —
     used so the Admin dashboard's map "jumps to" whichever
-    location is chosen in Location Selection. All markers for
+    location is chosen in Location Selection.
+    auto_fit (default False = unchanged behaviour) centers and
+    zooms the map so that ALL plotted markers are visible — used
+    by the System Handler map, where the set of locations shown
+    ranges from the whole country down to a single division. All markers for
     every other location are still drawn and still hoverable;
     only the initial camera position/zoom changes. Callers that
     don't pass focus_location (organization/public dashboards)
@@ -268,6 +321,21 @@ def create_flood_map(
             }
 
             map_zoom = 12
+
+    # --------------------------------------------------------
+    # Auto-fit: when asked (and no single location is in focus),
+    # center on the middle of the plotted markers and pick the
+    # zoom level at which the whole spread is visible, instead of
+    # the fixed zoom=9 which crops anything wider than ~2.5
+    # degrees (e.g. the nationwide view).
+    # --------------------------------------------------------
+
+    if auto_fit and map_center is None:
+
+        map_center, map_zoom = _fit_view(
+            map_df["latitude"].tolist(),
+            map_df["longitude"].tolist()
+        )
 
     # --------------------------------------------------------
     # Plotly 7.x uses scatter_map instead of scatter_mapbox.

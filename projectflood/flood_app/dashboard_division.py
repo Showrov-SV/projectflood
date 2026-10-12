@@ -6,6 +6,7 @@ from flood_app.alert_ui import render_emergency_alert_banner
 from flood_app.alerts import create_emergency_alert
 from flood_app.data_ui import sensor_and_dataset_management_section
 from flood_app.geography import DIVISION_AREAS
+from flood_app.history_ui import render_history_panel
 from flood_app.mail_roles import get_role_email, mailbox_key
 from flood_app.mail_ui import email_center
 from flood_app.maps import create_flood_map, location_badge_row
@@ -328,6 +329,19 @@ def division_admin_dashboard(division):
             st.warning(
                 "Please enter an alert message before sending."
             )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # HISTORICAL DATA (this division's own areas only)
+    # --------------------------------------------------------
+
+    st.subheader("📜 Historical Data")
+
+    render_history_panel(
+        DIVISION_AREAS.get(division, []),
+        key_prefix="div_history"
+    )
 
     st.divider()
 

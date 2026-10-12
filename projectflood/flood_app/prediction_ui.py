@@ -15,6 +15,21 @@ from flood_app.prediction import classify_risk, get_trained_hybrid_model
 # HYBRID PREDICTION DISPLAY (shared across dashboards)
 # ============================================================
 
+def _training_data_text(model_bundle):
+    """One-line description of what the active models were trained on."""
+
+    info = model_bundle.get("training_info")
+
+    if not info:
+
+        return "synthetic dataset only (original model)"
+
+    return (
+        f"synthetic base + {info['n_real_rows']} real rows "
+        f"({info['n_real_labeled']} with real outcome labels)"
+    )
+
+
 def render_hybrid_prediction_details(selected_row):
     """
     Shows the system's Predicted Water Level for one reading.
@@ -219,6 +234,7 @@ def render_model_information_panel():
 
         - Training samples: **{model_bundle.get('n_training_samples')}**
         - Held-out test samples: **{model_bundle.get('n_test_samples')}**
+        - Training data: **{_training_data_text(model_bundle)}**
         """)
 
         st.markdown(ml_intro_text)

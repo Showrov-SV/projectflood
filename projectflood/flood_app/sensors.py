@@ -11,7 +11,14 @@ from flood_app.config import (
     SENSOR_READING_RETENTION_DAYS,
     SIMULATION_REFRESH_SECONDS,
 )
+from flood_app.data_mode import (
+    get_live_sensor_readings,
+    is_live_mode,
+    live_data_signature,
+)
 from flood_app.database import get_connection
+from flood_app.retraining import maybe_retrain
+from flood_app.digital_twin import sync_twin
 from flood_app.datasets import get_dataset_readings
 from flood_app.geography import LOCATION_COORDINATES
 from flood_app.prediction import hybrid_flood_prediction_batch
@@ -272,6 +279,13 @@ def _build_simulation_snapshot():
 
     _prune_old_sensor_readings()
 
+    # Keep the digital twin synchronised with every fresh snapshot.
+    # Never let a twin problem break the sensor pipeline.
+    try:
+        sync_twin(readings, sensors)
+    except Exception:
+        pass
+
     return readings, datetime.now()
 
 
@@ -284,6 +298,24 @@ def _cached_simulation_snapshot(sensor_signature):
     return _build_simulation_snapshot()
 
 
+# Columns of a normal readings table. An EMPTY readings table (live mode
+# with no fresh real data yet) must still carry these columns, otherwise
+# the dashboards fail when they filter it by location.
+READING_COLUMNS = [
+    "sensor_id", "location", "timestamp", "water_level", "rainfall",
+    "river_flow", "temperature", "humidity", "soil_moisture",
+    "wind_speed", "flood_probability", "risk_level",
+    "predicted_water_level", "physics_probability", "ml_probability",
+    "ml_used", "model_name", "data_source",
+]
+
+
+def empty_readings():
+    """An empty readings table with the standard columns."""
+
+    return pd.DataFrame(columns=READING_COLUMNS)
+
+
 def refresh_simulated_data():
     """Throw away the current snapshot so the next render
     simulates fresh readings."""
@@ -292,6 +324,14 @@ def refresh_simulated_data():
 
 
 def get_simulated_readings():
+
+    # LIVE MODE: simulation is permanently off. Hard stop here so no
+    # code path can generate, predict or save a simulated reading.
+    if is_live_mode():
+
+        st.session_state["data_updated_at"] = datetime.now()
+
+        return empty_readings()
 
     if SIMULATION_REFRESH_SECONDS > 0:
 
@@ -308,11 +348,81 @@ def get_simulated_readings():
     return readings
 
 
+@st.cache_data(
+    ttl=max(SIMULATION_REFRESH_SECONDS, 1),
+    show_spinner=False
+)
+def _cached_live_twin_sync(sensor_signature, live_signature):
+    """Live-mode twin sync, throttled like the simulation snapshot
+    (and re-run immediately when a sensor is registered or a new real
+    reading arrives). Sensors with no fresh reading keep their old
+    reading time, so the twin ages them to Stale / Offline."""
+
+    try:
+        sync_twin(get_live_sensor_readings(), get_sensors())
+    except Exception:
+        pass  # never let a twin problem break the sensor pipeline
+
+    return True
+
+
+def _build_live_readings(dataset_readings):
+    """LIVE MODE: real data only - the newest reading of every real
+    sensor plus the latest row of every uploaded dataset. Where a
+    location has a fresh real-sensor reading, that wins over the
+    uploaded dataset's row for the same location. Registered sensors
+    with no fresh reading are simply absent (shown as 'no data')."""
+
+    sensor_readings = get_live_sensor_readings()
+
+    if not dataset_readings.empty and not sensor_readings.empty:
+
+        sensor_locations = set(
+            sensor_readings["location"].astype(str).str.strip().str.lower()
+        )
+
+        dataset_readings = dataset_readings[
+            ~dataset_readings["location"]
+            .astype(str).str.strip().str.lower()
+            .isin(sensor_locations)
+        ]
+
+    parts = [
+        part for part in (sensor_readings, dataset_readings)
+        if part is not None and not part.empty
+    ]
+
+    if not parts:
+
+        return empty_readings()
+
+    return pd.concat(parts, ignore_index=True)
+
+
 def generate_all_sensor_data():
 
     dataset_readings = (
         get_dataset_readings()
     )
+
+    if is_live_mode():
+
+        st.session_state["data_updated_at"] = datetime.now()
+
+        _cached_live_twin_sync(
+            _sensor_signature(),
+            live_data_signature()
+        )
+
+        combined = _build_live_readings(dataset_readings)
+
+        # Real data keeps arriving -> retrain the models in the
+        # background when enough new rows have accumulated.
+        maybe_retrain()
+
+        check_and_send_auto_alerts(combined)
+
+        return combined
 
     dataset_locations = set()
 

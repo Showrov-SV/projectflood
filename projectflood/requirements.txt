@@ -1,8 +1,8 @@
-streamlit
-pandas
-numpy
-plotly
-openpyxl
-streamlit-cookies-controller
-scikit-learn
-xgboost
+streamlit>=1.50
+pandas>=2.0
+numpy>=1.26
+plotly>=5.20
+openpyxl>=3.1
+streamlit-cookies-controller>=0.0.4
+scikit-learn>=1.4
+xgboost>=2.0

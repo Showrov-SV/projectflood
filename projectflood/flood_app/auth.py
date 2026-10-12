@@ -5,10 +5,16 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import smtplib
+import sqlite3
 import secrets as pysecrets
 from email.mime.text import MIMEText
 from streamlit_cookies_controller import CookieController
 
+from flood_app.activity_log import (
+    ACTION_OTP_SENT,
+    ACTION_PASSWORD_UPGRADED,
+    log_activity,
+)
 from flood_app.config import (
     ADMIN_OTP_LENGTH,
     ADMIN_OTP_MAX_ATTEMPTS,
@@ -19,6 +25,12 @@ from flood_app.config import (
     ADMIN_TRUSTED_DEVICE_DAYS,
 )
 from flood_app.database import get_connection
+from flood_app.passwords import (
+    dummy_verify,
+    hash_password,
+    needs_rehash,
+    verify_password,
+)
 
 
 # ============================================================
@@ -63,44 +75,102 @@ def authenticate_user(
     password
 ):
     """
-    Returns (username, role, division, area, district) on
-    success, or None. division/area/district are None for every
-    pre-existing account (Administrator, and the original global
-    Police/Fire Service/Hospital/Municipality/Admin) — only the
-    hierarchical accounts have division/area set (Division
-    Admins, division-specific Police/Fire Service/Hospital), or
-    district set (District Admins). Callers that only ever
-    unpacked (username, role) before still work: those two
-    fields are still the first two elements, in the same order.
+    Checks the username and password. Returns the tuple
+    (username, role, division, area, district) on success and None
+    on failure, so callers that only ever unpacked (username, role)
+    keep working: those two fields are still the first two
+    elements, in the same order.
+
+    Passwords are verified in constant time against a salted PBKDF2
+    hash. Accounts that still carry a legacy unsalted SHA-256 hash
+    (or a PBKDF2 hash with an out-of-date iteration count) are
+    upgraded transparently right after a successful login - the
+    one moment the plaintext password is available.
     """
 
     conn = get_connection()
 
-    hashed_password = hashlib.sha256(
-        password.encode()
-    ).hexdigest()
+    upgraded = False
 
-    result = conn.execute(
-        """
-        SELECT username, role, division, area, district
-        FROM users
-        WHERE username = ?
-        AND password = ?
-        """,
-        (
-            username,
-            hashed_password
+    try:
+
+        row = conn.execute(
+            """
+            SELECT username, role, division, area, district,
+                   password
+            FROM users
+            WHERE username = ?
+            """,
+            (username,)
+        ).fetchone()
+
+        if row is None:
+
+            # Same amount of work as a real check, so timing doesn't
+            # reveal which usernames exist.
+            dummy_verify(password)
+
+            return None
+
+        stored_hash = row[5]
+
+        if not verify_password(password, stored_hash):
+            return None
+
+        if needs_rehash(stored_hash):
+
+            try:
+
+                with conn:
+
+                    conn.execute(
+                        """
+                        UPDATE users
+                        SET password = ?
+                        WHERE username = ?
+                        AND password = ?
+                        """,
+                        (
+                            hash_password(password),
+                            row[0],
+                            stored_hash
+                        )
+                    )
+
+                upgraded = True
+
+            except sqlite3.Error:
+
+                pass  # login still succeeds; retry next time
+
+        result = tuple(row[:5])
+
+    finally:
+
+        conn.close()
+
+    if upgraded:
+
+        log_activity(
+            ACTION_PASSWORD_UPGRADED,
+            username=result[0],
+            role=result[1],
+            details="Password hash upgraded to salted PBKDF2"
         )
-    ).fetchone()
-
-    conn.close()
 
     return result
 
 
 def _hash_code(code):
-    """SHA-256 hash of an OTP (or password) — the plaintext OTP
-    is never written to the database or logged anywhere."""
+    """SHA-256 hash of a one-time code or trusted-device token - the
+    plaintext is never written to the database or logged anywhere.
+
+    A fast unsalted hash is acceptable HERE (unlike for passwords,
+    which use salted PBKDF2 - see passwords.py) because these values
+    are short-lived and attempt-limited: an OTP expires after a few
+    minutes and dies after a handful of wrong guesses, and a device
+    token is a 256-bit random value that cannot be guessed or
+    pre-computed."""
 
     return hashlib.sha256(
         code.encode()
@@ -395,11 +465,25 @@ def generate_and_send_admin_otp(username):
     success, error = send_otp_email(otp_code)
 
     if not success:
+
+        log_activity(
+            ACTION_OTP_SENT,
+            username=username,
+            role="System Handler",
+            status="failed",
+            details="OTP email could not be sent"
+        )
+
         return False, error
 
     otp_expires_at = _fmt_ts(
         _now() + timedelta(minutes=ADMIN_OTP_VALID_MINUTES)
     )
+
+    # Make sure this admin's security row exists - the UPDATE below
+    # would otherwise silently store nothing and the emailed code
+    # could never be verified.
+    get_admin_auth_state(username)
 
     conn = get_connection()
 
@@ -422,6 +506,13 @@ def generate_and_send_admin_otp(username):
 
     conn.commit()
     conn.close()
+
+    log_activity(
+        ACTION_OTP_SENT,
+        username=username,
+        role="System Handler",
+        details="OTP emailed (code itself is never logged)"
+    )
 
     return True, None
 

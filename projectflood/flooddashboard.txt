@@ -1,5 +1,5 @@
 aita 1st time dibi 
-pip install streamlit pandas numpy plotly openpyxl streamlit-cookies-controller scikit-learn
+pip install streamlit pandas numpy plotly openpyxl streamlit-cookies-controller scikit-learn xgboost
 
 
 then 

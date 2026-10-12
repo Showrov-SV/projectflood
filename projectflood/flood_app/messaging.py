@@ -3,6 +3,7 @@
 import pandas as pd
 from datetime import datetime
 
+from flood_app.activity_log import ACTION_MESSAGE_SENT, log_activity
 from flood_app.database import get_connection
 from flood_app.mail_roles import ALL_MAIL_ROLES, get_role_email
 
@@ -101,6 +102,11 @@ def send_email(
 
     conn.commit()
     conn.close()
+
+    log_activity(
+        ACTION_MESSAGE_SENT,
+        details=f"{sender_role} -> {target_role}: {subject}"
+    )
 
 
 def send_system_email(

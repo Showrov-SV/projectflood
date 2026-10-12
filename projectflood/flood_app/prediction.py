@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import hybrid_model
+from flood_app import retraining
 
 
 # ============================================================
@@ -132,17 +133,35 @@ def classify_risk(probability):
 #      / "risk_level" fields it always has, unmodified.
 # ============================================================
 
-@st.cache_resource(show_spinner=False)
-def get_trained_hybrid_model():
-    """
-    Trains hybrid_model's RandomForestRegressor once per server
-    process and caches the resulting bundle (trained model +
-    real held-out R²/MAE + feature importances). Cached by
-    Streamlit, so every rerun reuses the SAME trained model
-    instance rather than retraining from scratch.
-    """
+@st.cache_resource(show_spinner=False, max_entries=3)
+def _cached_model_bundle(version):
+    """Loads the model bundle for one version: 0 = the original
+    synthetic-only models (trained once, or loaded from the on-disk
+    cache), n > 0 = the models retrained on real data (see
+    retraining.py). If a retrained version's file can't be read, it
+    falls back to the original models rather than failing."""
+
+    if version > 0:
+
+        bundle = retraining.load_version_bundle(version)
+
+        if bundle is not None:
+
+            return bundle
 
     return hybrid_model.load_or_train_hybrid_ml_model()
+
+
+def get_trained_hybrid_model():
+    """
+    The model bundle predictions use right now. Cached per version by
+    Streamlit, so reruns reuse the SAME trained instance; when an
+    automatic retrain finishes and its version becomes active, the
+    next call transparently loads the new models (no restart, no
+    software update needed).
+    """
+
+    return _cached_model_bundle(retraining.get_active_version())
 
 
 def hybrid_flood_prediction(
