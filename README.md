@@ -37,7 +37,7 @@ the responding services in one application.
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Getting started](#getting-started)
-  - [Live demo](#live-demo)
+- [Live demo](#live-demo)
 - [Usage](#usage)
 - [Use cases](#use-cases)
 - [Architecture](#architecture)
