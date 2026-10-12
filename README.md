@@ -51,7 +51,6 @@ the responding services in one application.
 - [Districts](#districts)
 - [Application details](#application-details)
 - [Configuration reference](#configuration-reference)
-- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Project status and roadmap](#project-status-and-roadmap)
 - [Project information](#project-information)
