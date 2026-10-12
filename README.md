@@ -81,19 +81,19 @@ the responding services in one application.
 
 ## Screenshots
 
-![Figure 1: Role-Based System Interfaces](figures/figure-01-role-based-interfaces.png)
+![Figure 1: Role-Based System Interfaces](figures/figure-03-role-based-interfaces.png)
 
 <p align="center"><em>Figure 1. Role-based system interfaces: (a) System Handler Interface, (b) Division Admin Interface, (c) Fire Service Interface, (d) Police Interface, (e) Hospital Interface and (f) Public Interface.</em></p>
 
-![Figure 2: System Login, Security Verification and Data Input Process](figures/figure-02-login-security-input.png)
+![Figure 2: System Login, Security Verification and Data Input Process](figures/figure-04-login-security-input.png)
 
 <p align="center"><em>Figure 2. System login, security verification, and data input process: (a) Division Admin Login Interface, (b) System Handler Login using ID and Password, (c) Request for Authentication Code, and (d) Environmental data and dataset input interface.</em></p>
 
-![Figure 3: System Output and Database Results](figures/figure-03-output-and-database.png)
+![Figure 3: System Output and Database Results](figures/figure-05-output-and-database.png)
 
 <p align="center"><em>Figure 3. System Output and Database results: (a) Monitoring results after login, (b) Authentication code received for System Handler verification, (c) Hybrid flood forecast results, (d) Flood-risk classification and emergency alerts, and (e) Backend SQLite database records.</em></p>
 
-![Figure 4: Communication Process with Emergency Service Agencies](figures/figure-04-emergency-communication.png)
+![Figure 4: Communication Process with Emergency Service Agencies](figures/figure-06-emergency-communication.png)
 
 <p align="center"><em>Figure 4. Communication process with emergency service agencies: (a) an administrator sending a message to the Fire Service, (b) a record of the message sent, and (c) the message received on the Fire Service interface.</em></p>
 
@@ -207,7 +207,7 @@ in `flood_app/config.py`.
 
 ## Architecture
 
-![Figure 5: Architecture Framework and Methodology of the Proposed Flood Management System](figures/figure-05-architecture-framework.png)
+![Figure 5: Architecture Framework and Methodology of the Proposed Flood Management System](figures/figure-01-architecture-framework.png)
 
 <p align="center"><em>Figure 5. Architecture framework and methodology of the proposed Flood Management System for Bangladesh.</em></p>
 
@@ -287,7 +287,7 @@ Everything in the device, OSPF, addressing, VLAN and server tables below was rea
 from its router and server configurations; the software holds the same design as data in
 `flood_app/network_design.py` (the single source of truth for the twin).
 
-![Figure 6: Cisco Packet Tracer Based System Architecture](figures/figure-06-packet-tracer-architecture.png)
+![Figure 6: Cisco Packet Tracer Based System Architecture](figures/figure-02-packet-tracer-architecture.png)
 
 <p align="center"><em>Figure 6. Cisco Packet Tracer based system architecture.</em></p>
 
@@ -377,7 +377,7 @@ path the digital twin traces (see [How the software models the network](#how-the
 Data flow: **IoT devices -> Wireless Router0 -> Switch0 -> R5 -> R0 -> network areas and central services.**
 Server0 registers the local IoT devices and carries out the monitoring.
 
-![Figure 8: Packet Tracer IoT Monitoring Interface](figures/figure-08-packet-tracer-iot-monitoring.png)
+![Figure 8: Packet Tracer IoT Monitoring Interface](figures/figure-15-packet-tracer-iot-monitoring.png)
 
 <p align="center"><em>Figure 8. The IoT registration server login at flood.local, and the IoT Server device page showing the water level, temperature and humidity monitors and the siren.</em></p>
 
