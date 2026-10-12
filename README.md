@@ -76,7 +76,7 @@ the responding services in one application.
 5. **Keeps history** of readings and predictions for review.
 6. **Switches to live mode** when real data arrives and **retrains the
    prediction models** on it automatically, with safety checks (the [Data modes and automatic retraining](#data-modes-and-automatic-retraining) section).
-7. **Models the network** in a digital twin engine (no dashboard tab at present; see [Digital twin engine](#digital-twin-engine)).
+7. **Models the network** in a digital twin engine (see [Digital twin engine](#digital-twin-engine)).
 
 ## Screenshots
 <img width="1800" height="2620" alt="figure-03-role-based-interfaces" src="https://github.com/user-attachments/assets/2ec6e93b-4f59-45b8-b80d-27b827d8ce6f" />
